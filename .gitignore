@@ -1,0 +1,20 @@
+# Build
+build/
+cmake-build-*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OMC plugin state
+.omc/
+
+# Logs
+gomoku_ai.log
+
+# OS
+.DS_Store
+Thumbs.db
