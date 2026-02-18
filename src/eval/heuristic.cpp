@@ -4,6 +4,7 @@
 #include "gomoku/eval/patterns.hpp"
 #include "gomoku/board/bitboard.hpp"
 #include <utility>
+#include <cstdlib>
 
 namespace gomoku {
 

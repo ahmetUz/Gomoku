@@ -1,7 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include "gomoku/search/threat.hpp"
 #include "gomoku/board/board.hpp"
+#include <algorithm>
 #include <initializer_list>
+#include <tuple>
 
 using namespace gomoku;
 
