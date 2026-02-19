@@ -55,18 +55,12 @@ uint64_t ZobristTable::hash(const Board& board, Stone side_to_move) const {
 
 uint64_t ZobristTable::update_place(uint64_t h, Pos pos, Stone stone) const {
     size_t idx = pos.to_index();
-    uint64_t stone_hash;
+    uint64_t stone_hash = 0;
 
     switch (stone) {
-        case Stone::Black:
-            stone_hash = black_keys[idx];
-            break;
-        case Stone::White:
-            stone_hash = white_keys[idx];
-            break;
-        case Stone::Empty:
-            stone_hash = 0;
-            break;
+        case Stone::Black: stone_hash = black_keys[idx]; break;
+        case Stone::White: stone_hash = white_keys[idx]; break;
+        default: break;
     }
 
     return h ^ stone_hash ^ black_to_move;
@@ -79,18 +73,12 @@ uint64_t ZobristTable::update_remove(uint64_t h, Pos pos, Stone stone) const {
 
 uint64_t ZobristTable::update_capture(uint64_t h, Pos pos, Stone stone) const {
     size_t idx = pos.to_index();
-    uint64_t stone_hash;
+    uint64_t stone_hash = 0;
 
     switch (stone) {
-        case Stone::Black:
-            stone_hash = black_keys[idx];
-            break;
-        case Stone::White:
-            stone_hash = white_keys[idx];
-            break;
-        case Stone::Empty:
-            stone_hash = 0;
-            break;
+        case Stone::Black: stone_hash = black_keys[idx]; break;
+        case Stone::White: stone_hash = white_keys[idx]; break;
+        default: break;
     }
 
     return h ^ stone_hash;

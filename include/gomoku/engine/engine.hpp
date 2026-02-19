@@ -43,7 +43,7 @@ enum class SearchType {
 
 // Result of a move search with detailed statistics.
 struct MoveResult {
-    std::optional<Pos> best_move;  // Best move found, if any
+    Pos best_move = Pos::sentinel();  // Best move found (sentinel = no move)
     int32_t score = 0;             // Evaluation score
     SearchType search_type = SearchType::AlphaBeta;
     uint64_t time_ms = 0;         // Time taken in milliseconds

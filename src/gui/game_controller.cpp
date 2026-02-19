@@ -164,7 +164,7 @@ bool GameController::execute_move(Pos pos) {
     history_.push_back({pos, color, cap_info});
     last_move_ = pos;
 
-    auto winner = check_winner(board_);
+    auto winner = check_winner(board_, color);
     if (winner.has_value()) {
         winner_ = winner;
     }
@@ -271,8 +271,8 @@ void GameController::check_ai_result() {
 
     last_ai_result_ = result;
 
-    if (result.best_move.has_value()) {
-        if (!execute_move(*result.best_move)) {
+    if (!result.best_move.is_sentinel()) {
+        if (!execute_move(result.best_move)) {
             // AI returned an invalid move — bump generation to prevent infinite retry
             ++move_gen_;
         }

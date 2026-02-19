@@ -51,6 +51,51 @@ static constexpr size_t MAX_ROOT_MOVES = 30;
 // Aspiration window size
 static constexpr int32_t ASP_WINDOW = 100;
 
+// Stack-allocated move list to avoid heap allocation in hot paths.
+// Replaces std::vector<std::pair<Pos, int32_t>> in generate_moves_ordered
+// and quiescence. 128 entries × 8 bytes = 1 KB per recursion level.
+struct MoveList {
+    static constexpr size_t CAPACITY = 128;
+    std::pair<Pos, int32_t> data[CAPACITY];
+    size_t count = 0;
+    int32_t top_score = 0;  // highest score (set after sort)
+
+    void push_back(Pos pos, int32_t score) {
+        if (count < CAPACITY) data[count++] = {pos, score};
+    }
+    bool empty() const { return count == 0; }
+    size_t size() const { return count; }
+
+    std::pair<Pos, int32_t>* begin() { return data; }
+    std::pair<Pos, int32_t>* end() { return data + count; }
+    const std::pair<Pos, int32_t>* begin() const { return data; }
+    const std::pair<Pos, int32_t>* end() const { return data + count; }
+
+    std::pair<Pos, int32_t>& operator[](size_t i) { return data[i]; }
+    const std::pair<Pos, int32_t>& operator[](size_t i) const { return data[i]; }
+    std::pair<Pos, int32_t>& front() { return data[0]; }
+
+    void sort_descending() {
+        std::sort(data, data + count,
+            [](const auto& a, const auto& b) { return a.second > b.second; });
+        top_score = count > 0 ? data[0].second : 0;
+    }
+
+    // Remove elements where pred returns true, preserving order of kept elements.
+    // Equivalent to erase(remove_if(...), end()).
+    template<typename Pred>
+    void remove_if(Pred pred) {
+        size_t write = 0;
+        for (size_t read = 0; read < count; ++read) {
+            if (!pred(data[read])) {
+                if (write != read) data[write] = data[read];
+                ++write;
+            }
+        }
+        count = write;
+    }
+};
+
 // =========================================================================
 // SearchStats
 // =========================================================================
@@ -94,10 +139,10 @@ struct WorkerSearcher {
     std::shared_ptr<SharedState> shared;
     uint64_t nodes;
     int8_t max_depth;
-    std::optional<Pos> killer_moves[64][2];
+    Pos killer_moves[64][2];
     int32_t history[2][BOARD_SIZE][BOARD_SIZE];
-    std::optional<Pos> countermove[2][BOARD_SIZE][BOARD_SIZE];
-    std::optional<Pos> last_move_for_ordering;
+    Pos countermove[2][BOARD_SIZE][BOARD_SIZE];
+    Pos last_move_for_ordering = Pos::sentinel();
     std::optional<std::chrono::steady_clock::time_point> start_time;
     std::optional<std::chrono::milliseconds> time_limit;
     SearchStats stats;
@@ -154,16 +199,15 @@ struct WorkerSearcher {
         uint64_t hash);
 
     // Generate candidate moves ordered by priority.
-    // Returns (sorted moves with scores, top move score).
-    std::pair<std::vector<std::pair<Pos, int32_t>>, int32_t>
-    generate_moves_ordered(
+    // Fills a stack-allocated MoveList sorted by score descending.
+    MoveList generate_moves_ordered(
         const Board& board, Stone color,
-        std::optional<Pos> tt_move, int8_t depth) const;
+        Pos tt_move, int8_t depth) const;
 
     // Score a move for ordering purposes (defense-first philosophy).
     int32_t score_move(
         const Board& board, Pos mov, Stone color,
-        std::optional<Pos> tt_move, int8_t depth) const;
+        Pos tt_move, int8_t depth) const;
 
     // Scan a line from pos in both directions for both colors simultaneously.
     // Returns {my_count, my_open, my_gap, my_consec, opp_count, opp_open, opp_gap, opp_consec}.
@@ -200,7 +244,6 @@ SearchResult WorkerSearcher::search_iterative(
     const Board& board, Stone color, int8_t max_depth_arg, int8_t start_depth_offset) {
 
     SearchResult best_result;
-    best_result.best_move = std::nullopt;
     best_result.score = 0;
     best_result.depth = 0;
     best_result.nodes = 0;
@@ -325,29 +368,27 @@ SearchResult WorkerSearcher::search_iterative(
 SearchResult WorkerSearcher::search_root(
     Board& board, Stone color, int8_t depth, int32_t alpha, int32_t beta) {
 
-    std::optional<Pos> best_move = std::nullopt;
+    Pos best_move = Pos::sentinel();
     int32_t best_score = -INF;
 
     uint64_t hash = shared->zobrist.hash(board, color);
-    auto tt_move = shared->tt.get_best_move(hash);
-    last_move_for_ordering = std::nullopt;
-    auto [moves, _top_score] = generate_moves_ordered(board, color, tt_move, depth);
+    Pos tt_move = shared->tt.get_best_move(hash).value_or(Pos::sentinel());
+    last_move_for_ordering = Pos::sentinel();
+    MoveList moves = generate_moves_ordered(board, color, tt_move, depth);
 
     // Lazy double-three: keep the first MAX_ROOT_MOVES valid moves.
     // Forbidden (double-three) moves may score high, so we can't truncate
     // first -- that would displace valid defensive moves from the top-N.
     {
         size_t valid_count = 0;
-        auto it = std::remove_if(moves.begin(), moves.end(),
-            [&](const std::pair<Pos, int32_t>& entry) {
-                if (valid_count >= MAX_ROOT_MOVES) return true;
-                if (is_valid_move(board, entry.first, color)) {
-                    ++valid_count;
-                    return false;
-                }
-                return true;
-            });
-        moves.erase(it, moves.end());
+        moves.remove_if([&](const std::pair<Pos, int32_t>& entry) {
+            if (valid_count >= MAX_ROOT_MOVES) return true;
+            if (is_valid_move(board, entry.first, color)) {
+                ++valid_count;
+                return false;
+            }
+            return true;
+        });
     }
 
     for (size_t i = 0; i < moves.size(); ++i) {
@@ -416,7 +457,7 @@ SearchResult WorkerSearcher::search_root(
         EntryType entry_type = (best_score >= beta)
             ? EntryType::LowerBound
             : EntryType::Exact; // Root always starts with full window
-        shared->tt.store(hash, depth, best_score, entry_type, best_move);
+        shared->tt.store(hash, depth, best_score, entry_type, best_move.is_sentinel() ? std::nullopt : std::optional<Pos>(best_move));
     }
 
     SearchResult result;
@@ -649,8 +690,7 @@ int32_t WorkerSearcher::quiescence(
     constexpr int8_t dirs[4][2] = {{1,0},{0,1},{1,1},{1,-1}};
 
     // Generate forcing moves only: fives, fours, capture-wins.
-    std::vector<std::pair<Pos, int32_t>> forcing_moves;
-    forcing_moves.reserve(16);
+    MoveList forcing_moves;
     bool seen[BOARD_SIZE][BOARD_SIZE] = {};
 
     // Iterate all stones (black then white)
@@ -722,7 +762,7 @@ int32_t WorkerSearcher::quiescence(
                 }
 
                 if (priority > 0) {
-                    forcing_moves.push_back({pos, priority});
+                    forcing_moves.push_back(pos, priority);
                 }
             }
         }
@@ -792,7 +832,7 @@ int32_t WorkerSearcher::quiescence(
                 }
 
                 if (priority > 0) {
-                    forcing_moves.push_back({pos, priority});
+                    forcing_moves.push_back(pos, priority);
                 }
             }
         }
@@ -801,14 +841,13 @@ int32_t WorkerSearcher::quiescence(
     if (forcing_moves.empty()) return stand_pat;
 
     // Sort by priority (highest first)
-    std::sort(forcing_moves.begin(), forcing_moves.end(),
-        [](const auto& a, const auto& b) { return a.second > b.second; });
+    forcing_moves.sort_descending();
 
     // Move count pruning (PentaZen-style): limit forcing moves per QS node.
     size_t max_qs_moves = (qs_depth <= 2) ? 8 : 4;
 
     int32_t best_score = stand_pat;
-    std::optional<Pos> best_move = std::nullopt;
+    Pos best_move = Pos::sentinel();
     size_t moves_searched = 0;
 
     for (auto& [mov, priority] : forcing_moves) {
@@ -859,7 +898,7 @@ int32_t WorkerSearcher::quiescence(
         } else {
             entry_type = EntryType::UpperBound;
         }
-        shared->tt.store(hash, 0, best_score, entry_type, best_move);
+        shared->tt.store(hash, 0, best_score, entry_type, best_move.is_sentinel() ? std::nullopt : std::optional<Pos>(best_move));
     }
 
     return best_score;
@@ -1018,26 +1057,26 @@ int32_t WorkerSearcher::alpha_beta(
     }
 #endif
 
-    auto tt_move = shared->tt.get_best_move(hash);
-    if (tt_move.has_value()) stats.tt_move_hits += 1;
+    Pos tt_move = shared->tt.get_best_move(hash).value_or(Pos::sentinel());
+    if (!tt_move.is_sentinel()) stats.tt_move_hits += 1;
 
     // Internal Iterative Deepening (IID)
 #ifndef GOMOKU_NO_IID
-    if (!tt_move.has_value() && depth >= 6) {
+    if (tt_move.is_sentinel() && depth >= 6) {
         int8_t iid_depth = std::max(int8_t(depth - 4), int8_t(1));
         alpha_beta(board, color, iid_depth, alpha, beta, last_move, hash, false);
         if (!is_stopped()) {
-            tt_move = shared->tt.get_best_move(hash);
+            tt_move = shared->tt.get_best_move(hash).value_or(Pos::sentinel());
         }
     }
 #endif
 
     last_move_for_ordering = last_move;
-    auto [moves, top_score] = generate_moves_ordered(board, color, tt_move, depth);
+    MoveList moves = generate_moves_ordered(board, color, tt_move, depth);
     if (moves.empty()) return evaluate(board, color);
 
     // Adaptive move limit: reduce in quiet positions (no tactical patterns).
-    bool is_tactical = top_score >= 850000;
+    bool is_tactical = moves.top_score >= 850000;
 
     size_t max_moves;
     if (is_tactical) {
@@ -1059,16 +1098,14 @@ int32_t WorkerSearcher::alpha_beta(
     // Lazy double-three: keep the first max_moves valid moves.
     {
         size_t valid_count = 0;
-        auto it = std::remove_if(moves.begin(), moves.end(),
-            [&](const std::pair<Pos, int32_t>& entry) {
-                if (valid_count >= max_moves) return true;
-                if (is_valid_move(board, entry.first, color)) {
-                    ++valid_count;
-                    return false;
-                }
-                return true;
-            });
-        moves.erase(it, moves.end());
+        moves.remove_if([&](const std::pair<Pos, int32_t>& entry) {
+            if (valid_count >= max_moves) return true;
+            if (is_valid_move(board, entry.first, color)) {
+                ++valid_count;
+                return false;
+            }
+            return true;
+        });
     }
 
     // Futility pruning setup
@@ -1083,7 +1120,7 @@ int32_t WorkerSearcher::alpha_beta(
 #endif
 
     int32_t best_score = -INF;
-    std::optional<Pos> best_move = std::nullopt;
+    Pos best_move = Pos::sentinel();
     EntryType entry_type = EntryType::UpperBound;
 
     for (size_t i = 0; i < moves.size(); ++i) {
@@ -1220,7 +1257,7 @@ int32_t WorkerSearcher::alpha_beta(
         }
     }
 
-    shared->tt.store(hash, depth, best_score, entry_type, best_move);
+    shared->tt.store(hash, depth, best_score, entry_type, best_move.is_sentinel() ? std::nullopt : std::optional<Pos>(best_move));
     return best_score;
 }
 
@@ -1476,11 +1513,11 @@ int32_t WorkerSearcher::capture_vulnerability(
 
 int32_t WorkerSearcher::score_move(
     const Board& board, Pos mov, Stone color,
-    std::optional<Pos> tt_move, int8_t depth) const {
+    Pos tt_move, int8_t depth) const {
 
     Stone opp = opponent(color);
 
-    if (tt_move.has_value() && *tt_move == mov) return 1000000;
+    if (!tt_move.is_sentinel() && tt_move == mov) return 1000000;
 
     // Direct bitboard access
     const Bitboard* my_bb = board.stones(color);
@@ -1636,18 +1673,18 @@ int32_t WorkerSearcher::score_move(
 
     auto ply = static_cast<size_t>(std::max(int8_t(max_depth - depth), int8_t(0)));
     if (ply < 64) {
-        if (killer_moves[ply][0].has_value() && *killer_moves[ply][0] == mov)
+        if (!killer_moves[ply][0].is_sentinel() && killer_moves[ply][0] == mov)
             return 500000 - capture_penalty;
-        if (killer_moves[ply][1].has_value() && *killer_moves[ply][1] == mov)
+        if (!killer_moves[ply][1].is_sentinel() && killer_moves[ply][1] == mov)
             return 490000 - capture_penalty;
     }
 
     // Countermove bonus
-    if (last_move_for_ordering.has_value()) {
-        Pos lm = *last_move_for_ordering;
+    if (!last_move_for_ordering.is_sentinel()) {
+        Pos lm = last_move_for_ordering;
         int opp_idx = (color == Stone::Black) ? 1 : 0;
-        if (countermove[opp_idx][lm.row][lm.col].has_value()
-            && *countermove[opp_idx][lm.row][lm.col] == mov) {
+        if (!countermove[opp_idx][lm.row][lm.col].is_sentinel()
+            && countermove[opp_idx][lm.row][lm.col] == mov) {
             return 400000 - capture_penalty;
         }
     }
@@ -1697,20 +1734,20 @@ int32_t WorkerSearcher::score_move(
 // WorkerSearcher: generate_moves_ordered
 // =========================================================================
 
-std::pair<std::vector<std::pair<Pos, int32_t>>, int32_t>
-WorkerSearcher::generate_moves_ordered(
+MoveList WorkerSearcher::generate_moves_ordered(
     const Board& board, Stone color,
-    std::optional<Pos> tt_move, int8_t depth) const {
+    Pos tt_move, int8_t depth) const {
 
-    bool seen[BOARD_SIZE][BOARD_SIZE] = {};
+    MoveList moves;
 
     if (board.is_board_empty()) {
-        return {{std::make_pair(Pos{9, 9}, int32_t(1000000))}, 0};
+        moves.push_back(Pos{9, 9}, 1000000);
+        moves.top_score = 0;
+        return moves;
     }
 
+    bool seen[BOARD_SIZE][BOARD_SIZE] = {};
     constexpr int32_t radius = 2;
-    std::vector<std::pair<Pos, int32_t>> scored;
-    scored.reserve(50);
 
     // Iterate black then white
     for (Pos pos : board.black) {
@@ -1727,7 +1764,7 @@ WorkerSearcher::generate_moves_ordered(
                 Pos new_pos{uint8_t(r), uint8_t(c)};
                 if (board.is_empty(new_pos)) {
                     int32_t s = score_move(board, new_pos, color, tt_move, depth);
-                    scored.push_back({new_pos, s});
+                    moves.push_back(new_pos, s);
                 }
             }
         }
@@ -1746,16 +1783,14 @@ WorkerSearcher::generate_moves_ordered(
                 Pos new_pos{uint8_t(r), uint8_t(c)};
                 if (board.is_empty(new_pos)) {
                     int32_t s = score_move(board, new_pos, color, tt_move, depth);
-                    scored.push_back({new_pos, s});
+                    moves.push_back(new_pos, s);
                 }
             }
         }
     }
 
-    std::sort(scored.begin(), scored.end(),
-        [](const auto& a, const auto& b) { return a.second > b.second; });
-    int32_t top_score = scored.empty() ? 0 : scored.front().second;
-    return {std::move(scored), top_score};
+    moves.sort_descending();
+    return moves;
 }
 
 // =========================================================================
@@ -1787,16 +1822,15 @@ SearchResult Searcher::search(const Board& board, Stone color, int8_t max_depth)
     worker.shared = shared_;
     worker.nodes = 0;
     worker.max_depth = max_depth;
-    std::memset(worker.killer_moves, 0, sizeof(worker.killer_moves));
+    std::memset(worker.killer_moves, 0xFF, sizeof(worker.killer_moves));
     std::memcpy(worker.history, history_, sizeof(history_));
-    std::memset(worker.countermove, 0, sizeof(worker.countermove));
-    worker.last_move_for_ordering = std::nullopt;
+    std::memset(worker.countermove, 0xFF, sizeof(worker.countermove));
+    worker.last_move_for_ordering = Pos::sentinel();
     worker.start_time = std::nullopt;
     worker.time_limit = std::nullopt;
     worker.stats = SearchStats{};
 
     SearchResult best_result;
-    best_result.best_move = std::nullopt;
     best_result.score = 0;
     best_result.depth = 0;
     best_result.nodes = 0;
@@ -1855,10 +1889,10 @@ SearchResult Searcher::search_timed(
             w.shared = shared_copy;
             w.nodes = 0;
             w.max_depth = max_depth;
-            std::memset(w.killer_moves, 0, sizeof(w.killer_moves));
+            std::memset(w.killer_moves, 0xFF, sizeof(w.killer_moves));
             std::memset(w.history, 0, sizeof(w.history));
-            std::memset(w.countermove, 0, sizeof(w.countermove));
-            w.last_move_for_ordering = std::nullopt;
+            std::memset(w.countermove, 0xFF, sizeof(w.countermove));
+            w.last_move_for_ordering = Pos::sentinel();
             w.start_time = start;
             w.time_limit = time_limit;
             w.stats = SearchStats{};
@@ -1874,10 +1908,10 @@ SearchResult Searcher::search_timed(
     main_worker.shared = shared_;
     main_worker.nodes = 0;
     main_worker.max_depth = max_depth;
-    std::memset(main_worker.killer_moves, 0, sizeof(main_worker.killer_moves));
+    std::memset(main_worker.killer_moves, 0xFF, sizeof(main_worker.killer_moves));
     std::memcpy(main_worker.history, history_, sizeof(history_));
-    std::memset(main_worker.countermove, 0, sizeof(main_worker.countermove));
-    main_worker.last_move_for_ordering = std::nullopt;
+    std::memset(main_worker.countermove, 0xFF, sizeof(main_worker.countermove));
+    main_worker.last_move_for_ordering = Pos::sentinel();
     main_worker.start_time = start;
     main_worker.time_limit = time_limit;
     main_worker.stats = SearchStats{};

@@ -42,8 +42,15 @@ std::vector<Pos> find_five_break_moves(
     const std::vector<Pos>& five_positions,
     Stone five_color);
 
-// Check for a winner. Returns the winning color, or nullopt.
-// Win conditions: 5 pair captures, or unbreakable 5-in-a-row.
-std::optional<Stone> check_winner(const Board& board);
+// Check for a winner after last_player just moved.
+// Win conditions: 5 pair captures, or 5-in-a-row.
+//
+// Temporal rule for breakable fives:
+//   1. If the OTHER player has a five on the board, last_player didn't
+//      break it → other player wins (their chance has passed).
+//   2. If last_player just formed a five:
+//      - Unbreakable → last_player wins.
+//      - Breakable → game continues (other gets one turn to break it).
+std::optional<Stone> check_winner(const Board& board, Stone last_player);
 
 } // namespace gomoku

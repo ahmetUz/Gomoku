@@ -17,8 +17,8 @@ TEST_CASE("search_empty_board", "[alphabeta]") {
     Board board;
 
     SearchResult result = searcher.search(board, Stone::Black, 4);
-    REQUIRE(result.best_move.has_value());
-    REQUIRE(*result.best_move == Pos(9, 9));
+    REQUIRE(!result.best_move.is_sentinel());
+    REQUIRE(result.best_move == Pos(9, 9));
 }
 
 TEST_CASE("search_finds_winning_move", "[alphabeta]") {
@@ -71,8 +71,8 @@ TEST_CASE("search_with_captures", "[alphabeta]") {
     board.place_stone(Pos(9, 9), Stone::Black);
 
     SearchResult result = searcher.search(board, Stone::Black, 4);
-    REQUIRE(result.best_move.has_value());
-    Pos mov = *result.best_move;
+    REQUIRE(!result.best_move.is_sentinel());
+    Pos mov = result.best_move;
     REQUIRE(mov.row >= 7);
     REQUIRE(mov.row <= 11);
     REQUIRE(mov.col >= 3);
@@ -159,15 +159,15 @@ TEST_CASE("search_multiple_times", "[alphabeta]") {
     board.place_stone(Pos(9, 9), Stone::Black);
 
     SearchResult result1 = searcher.search(board, Stone::White, 4);
-    REQUIRE(result1.best_move.has_value());
+    REQUIRE(!result1.best_move.is_sentinel());
 
     SearchResult result2 = searcher.search(board, Stone::White, 4);
-    REQUIRE(result2.best_move.has_value());
+    REQUIRE(!result2.best_move.is_sentinel());
 
     REQUIRE((result2.nodes <= result1.nodes || result2.nodes < result1.nodes + 500));
 
-    Pos m1 = *result1.best_move;
-    Pos m2 = *result2.best_move;
+    Pos m1 = result1.best_move;
+    Pos m2 = result2.best_move;
     REQUIRE(std::abs(int(m1.row) - 9) <= 2);
     REQUIRE(std::abs(int(m1.col) - 9) <= 2);
     REQUIRE(std::abs(int(m2.row) - 9) <= 2);
@@ -188,7 +188,7 @@ TEST_CASE("parallel_search_timed", "[alphabeta]") {
     board.place_stone(Pos(8, 10), Stone::White);
 
     SearchResult result = searcher.search_timed(board, Stone::Black, 12, 500);
-    REQUIRE(result.best_move.has_value());
+    REQUIRE(!result.best_move.is_sentinel());
     REQUIRE(result.depth >= 4);
     REQUIRE(result.nodes > 0);
 }

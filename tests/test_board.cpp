@@ -9,7 +9,7 @@ using namespace gomoku;
 TEST_CASE("Stone: opponent", "[types]") {
     REQUIRE(opponent(Stone::Black) == Stone::White);
     REQUIRE(opponent(Stone::White) == Stone::Black);
-    REQUIRE(opponent(Stone::Empty) == Stone::Empty);
+    // opponent(Empty) is undefined — branchless XOR only handles Black/White
 }
 
 TEST_CASE("Pos: new", "[types]") {

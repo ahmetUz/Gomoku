@@ -48,13 +48,13 @@ TEST_CASE("Win: four in row not win", "[win]") {
 TEST_CASE("Win: capture win", "[win]") {
     Board board;
     board.add_captures(Stone::Black, 5);
-    REQUIRE(check_winner(board) == Stone::Black);
+    REQUIRE(check_winner(board, Stone::Black) == Stone::Black);
 }
 
 TEST_CASE("Win: capture win white", "[win]") {
     Board board;
     board.add_captures(Stone::White, 5);
-    REQUIRE(check_winner(board) == Stone::White);
+    REQUIRE(check_winner(board, Stone::White) == Stone::White);
 }
 
 TEST_CASE("Win: breakable five", "[win]") {
@@ -79,12 +79,12 @@ TEST_CASE("Win: unbreakable five wins", "[win]") {
     for (uint8_t i = 5; i < 10; ++i) {
         board.place_stone(Pos(9, i), Stone::Black);
     }
-    REQUIRE(check_winner(board) == Stone::Black);
+    REQUIRE(check_winner(board, Stone::Black) == Stone::Black);
 }
 
 TEST_CASE("Win: no winner", "[win]") {
     Board board;
-    REQUIRE(check_winner(board) == std::nullopt);
+    REQUIRE(check_winner(board, Stone::Black) == std::nullopt);
 }
 
 TEST_CASE("Win: diagonal SW five", "[win]") {
@@ -94,7 +94,7 @@ TEST_CASE("Win: diagonal SW five", "[win]") {
         board.place_stone(Pos(4 + i, 8 - i), Stone::White);
     }
     REQUIRE(has_five_in_row(board, Stone::White));
-    REQUIRE(check_winner(board) == Stone::White);
+    REQUIRE(check_winner(board, Stone::White) == Stone::White);
 }
 
 TEST_CASE("Win: five at board edge", "[win]") {
@@ -104,7 +104,7 @@ TEST_CASE("Win: five at board edge", "[win]") {
         board.place_stone(Pos(18, i), Stone::Black);
     }
     REQUIRE(has_five_in_row(board, Stone::Black));
-    REQUIRE(check_winner(board) == Stone::Black);
+    REQUIRE(check_winner(board, Stone::Black) == Stone::Black);
 }
 
 TEST_CASE("Win: five at corner", "[win]") {
@@ -114,7 +114,7 @@ TEST_CASE("Win: five at corner", "[win]") {
         board.place_stone(Pos(14 + i, 14 + i), Stone::White);
     }
     REQUIRE(has_five_in_row(board, Stone::White));
-    REQUIRE(check_winner(board) == Stone::White);
+    REQUIRE(check_winner(board, Stone::White) == Stone::White);
 }
 
 TEST_CASE("Win: empty not five", "[win]") {
@@ -131,6 +131,37 @@ TEST_CASE("Win: capture beats five", "[win]") {
     for (uint8_t i = 0; i < 5; ++i) {
         board.place_stone(Pos(9, i), Stone::Black);
     }
-    // White wins by capture (checked first)
-    REQUIRE(check_winner(board) == Stone::White);
+    // White wins by capture (checked first), regardless of who moved last
+    REQUIRE(check_winner(board, Stone::Black) == Stone::White);
+    REQUIRE(check_winner(board, Stone::White) == Stone::White);
+}
+
+TEST_CASE("Win: breakable five - temporal rule", "[win]") {
+    // Black has a breakable five at row 9, cols 5-9.
+    // White stone at (7,7), Black stone at (8,7) → White can capture (9,7)+(8,7) via (10,7).
+    Board board;
+    board.place_stone(Pos(7, 7), Stone::White);
+    for (uint8_t i = 5; i < 10; ++i) {
+        board.place_stone(Pos(9, i), Stone::Black);
+    }
+    board.place_stone(Pos(8, 7), Stone::Black);
+
+    // Black just formed the five → breakable → game continues (White gets a chance)
+    REQUIRE(check_winner(board, Stone::Black) == std::nullopt);
+
+    // But if White moves next and doesn't break it → Black wins
+    // Simulate: White plays somewhere irrelevant
+    board.place_stone(Pos(0, 0), Stone::White);
+    REQUIRE(check_winner(board, Stone::White) == Stone::Black);
+}
+
+TEST_CASE("Win: opponent five not broken means they win", "[win]") {
+    // Black has an unbreakable five. White just moved (didn't break it) → Black wins.
+    Board board;
+    for (uint8_t i = 0; i < 5; ++i) {
+        board.place_stone(Pos(9, i), Stone::Black);
+    }
+    // White just played somewhere else
+    board.place_stone(Pos(0, 0), Stone::White);
+    REQUIRE(check_winner(board, Stone::White) == Stone::Black);
 }

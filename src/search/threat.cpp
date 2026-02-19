@@ -23,6 +23,31 @@ static constexpr int DIRECTIONS[4][2] = {
     {1, -1},  // Diagonal SW
 };
 
+// Check if placing stone at pos would capture any stone from the targets list.
+// Zero-allocation alternative to get_captured_positions + std::find.
+static bool captures_any_of(const Board& board, Pos pos, Stone stone,
+                            const Pos* targets, int target_count) {
+    Stone opp = opponent(stone);
+    for (const auto& dir : DIRECTIONS) {
+        for (int sign : {-1, 1}) {
+            int dr = dir[0] * sign;
+            int dc = dir[1] * sign;
+            int r3 = pos.row + dr * 3;
+            int c3 = pos.col + dc * 3;
+            if (!Pos::is_valid(r3, c3)) continue;
+            Pos pos1{uint8_t(pos.row + dr),     uint8_t(pos.col + dc)};
+            Pos pos2{uint8_t(pos.row + dr * 2), uint8_t(pos.col + dc * 2)};
+            Pos pos3{uint8_t(r3),               uint8_t(c3)};
+            if (board.get(pos1) == opp && board.get(pos2) == opp && board.get(pos3) == stone) {
+                for (int i = 0; i < target_count; ++i) {
+                    if (targets[i] == pos1 || targets[i] == pos2) return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 ThreatSearcher::ThreatSearcher()
     : max_vcf_depth_(30), max_vct_depth_(20), nodes_(0) {}
 
@@ -63,7 +88,9 @@ bool ThreatSearcher::vcf_search(Board& board, Stone color, uint8_t depth,
         bool found_win = false;
         bool is_breakable_five = false;
         if (has_five_at_pos(board, threat_move, color)) {
-            auto five = find_five_positions(board, color);
+            // Use find_five_line_at_pos (scans 4 dirs from known pos)
+            // instead of find_five_positions (scans ALL stones).
+            auto five = find_five_line_at_pos(board, threat_move, color);
             if (five.has_value()) {
                 if (!can_break_five_by_capture(board, *five, color)) {
                     found_win = true;
@@ -348,11 +375,12 @@ std::vector<Pos> ThreatSearcher::find_defense_moves(
     std::sort(four_positions.begin(), four_positions.end());
     four_positions.erase(std::unique(four_positions.begin(), four_positions.end()), four_positions.end());
 
-    // Find capture moves as defenses
+    // Find capture moves as defenses (zero-allocation path)
     // In Ninuki-renju, the defender can ignore the four and capture instead:
     // - Captures that break the four (remove stones from the four pattern)
     // - ANY capture when defender has 3+ captures (closing in on capture-win)
     bool capture_is_strategic = defender_captures >= 3;
+    int four_pos_count = static_cast<int>(four_positions.size());
     for (int r = 0; r < BOARD_SIZE; r++) {
         for (int c = 0; c < BOARD_SIZE; c++) {
             Pos pos{uint8_t(r), uint8_t(c)};
@@ -360,16 +388,15 @@ std::vector<Pos> ThreatSearcher::find_defense_moves(
                 continue;
             }
 
-            std::vector<Pos> captured = get_captured_positions(board, pos, defender);
-            if (!captured.empty()) {
-                // Add as defense if:
-                // 1. Capture breaks the four pattern, OR
-                // 2. Defender has 3+ captures (any capture is strategically significant)
-                bool breaks_four = std::any_of(captured.begin(), captured.end(),
-                    [&four_positions](const Pos& cap) {
-                        return std::find(four_positions.begin(), four_positions.end(), cap) != four_positions.end();
-                    });
-                if (capture_is_strategic || breaks_four) {
+            if (capture_is_strategic) {
+                // Any capture is a valid defense when close to capture-win
+                if (has_capture(board, pos, defender)) {
+                    defenses.push_back(pos);
+                }
+            } else if (four_pos_count > 0) {
+                // Only captures that break the four pattern
+                if (captures_any_of(board, pos, defender,
+                                    four_positions.data(), four_pos_count)) {
                     defenses.push_back(pos);
                 }
             }
@@ -421,7 +448,7 @@ bool ThreatSearcher::vct_search(Board& board, Stone color, uint8_t depth,
         bool found_win = false;
         bool is_breakable_five = false;
         if (has_five_at_pos(board, threat_move, color)) {
-            auto five = find_five_positions(board, color);
+            auto five = find_five_line_at_pos(board, threat_move, color);
             if (five.has_value()) {
                 if (!can_break_five_by_capture(board, *five, color)) {
                     found_win = true;
@@ -488,17 +515,22 @@ bool ThreatSearcher::vct_search(Board& board, Stone color, uint8_t depth,
         // For VCT, we need to beat ALL possible defenses
         bool all_defenses_beaten = true;
         Stone defender = opponent(color);
+        size_t seq_size_before_defense = sequence.size();
         for (const Pos& defense : defenses) {
             board.place_stone(defense, defender);
             CaptureInfo def_cap = execute_captures_fast(board, defense, defender);
 
-            // Recursively try to find a win against this defense
-            std::vector<Pos> sub_sequence = sequence;
-            bool beaten = vct_search(board, color, depth + 1, sub_sequence);
+            // Recursively try to find a win against this defense.
+            // Pass sequence by reference — callee pushes/pops via backtracking.
+            // Restore sequence to pre-defense state after each branch.
+            bool beaten = vct_search(board, color, depth + 1, sequence);
 
             // Unmake defense
             undo_captures(board, defender, def_cap);
             board.remove_stone(defense);
+
+            // Restore sequence to state before this defense branch
+            sequence.resize(seq_size_before_defense);
 
             if (!beaten) {
                 all_defenses_beaten = false;
@@ -655,22 +687,18 @@ std::vector<Pos> ThreatSearcher::find_threat_defenses(
     std::sort(threat_positions.begin(), threat_positions.end());
     threat_positions.erase(std::unique(threat_positions.begin(), threat_positions.end()), threat_positions.end());
 
-    // Add capture defenses that actually break the threat
+    // Add capture defenses that actually break the threat (zero-allocation)
     // Only include captures that remove stones that are part of the threat pattern
-    for (int r = 0; r < BOARD_SIZE; r++) {
-        for (int c = 0; c < BOARD_SIZE; c++) {
-            Pos pos{uint8_t(r), uint8_t(c)};
-            if (!is_valid_move(board, pos, defender)) {
-                continue;
-            }
-            std::vector<Pos> captured = get_captured_positions(board, pos, defender);
-            if (!captured.empty()) {
-                // Only add as defense if any captured stone is part of the threat pattern
-                bool breaks_threat = std::any_of(captured.begin(), captured.end(),
-                    [&threat_positions](const Pos& cap) {
-                        return std::find(threat_positions.begin(), threat_positions.end(), cap) != threat_positions.end();
-                    });
-                if (breaks_threat) {
+    int threat_pos_count = static_cast<int>(threat_positions.size());
+    if (threat_pos_count > 0) {
+        for (int r = 0; r < BOARD_SIZE; r++) {
+            for (int c = 0; c < BOARD_SIZE; c++) {
+                Pos pos{uint8_t(r), uint8_t(c)};
+                if (!is_valid_move(board, pos, defender)) {
+                    continue;
+                }
+                if (captures_any_of(board, pos, defender,
+                                    threat_positions.data(), threat_pos_count)) {
                     defenses.push_back(pos);
                 }
             }

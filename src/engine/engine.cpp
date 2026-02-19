@@ -26,14 +26,20 @@ std::string pos_to_notation(Pos pos) {
     return std::string(1, col_char) + std::to_string(pos.row + 1);
 }
 
-// Write a log message to both gomoku_ai.log and stderr
+// Write a log message to both gomoku_ai.log and stderr.
+// Uses a persistent file handle to avoid open/close on every call.
 void ai_log(const std::string& msg) {
-    std::ofstream file("gomoku_ai.log", std::ios::app);
+#ifdef NDEBUG
+    // In release builds, skip file logging entirely for performance
+    (void)msg;
+#else
+    static std::ofstream file("gomoku_ai.log", std::ios::app);
     if (file.is_open()) {
         file << msg << "\n";
         file.flush();
     }
     std::cerr << msg << "\n";
+#endif
 }
 
 // MoveResult factory methods
@@ -86,7 +92,6 @@ MoveResult MoveResult::vct_win(Pos pos, uint64_t time_ms, uint64_t nodes) {
 
 MoveResult MoveResult::no_move(uint64_t time_ms) {
     MoveResult result;
-    result.best_move = std::nullopt;
     result.score = 0;
     result.search_type = SearchType::AlphaBeta;
     result.time_ms = time_ms;
@@ -155,7 +160,8 @@ AIEngine::AIEngine(size_t tt_size_mb, int8_t max_depth, uint64_t time_limit_ms)
 }
 
 std::optional<Pos> AIEngine::get_move(const Board& board, Stone color) {
-    return get_move_with_stats(board, color).best_move;
+    Pos p = get_move_with_stats(board, color).best_move;
+    return p.is_sentinel() ? std::nullopt : std::optional<Pos>(p);
 }
 
 MoveResult AIEngine::get_move_with_stats(const Board& board, Stone color) {
@@ -397,8 +403,8 @@ MoveResult AIEngine::get_move_with_stats(const Board& board, Stone color) {
 
     oss.str("");
     oss << "  Stage 5 ALPHA-BETA: move=";
-    if (result.best_move) {
-        oss << pos_to_notation(*result.best_move);
+    if (!result.best_move.is_sentinel()) {
+        oss << pos_to_notation(result.best_move);
     } else {
         oss << "none";
     }

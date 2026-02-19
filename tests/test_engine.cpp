@@ -28,8 +28,8 @@ TEST_CASE("test_engine_finds_immediate_win", "[engine]") {
     AIEngine engine;
     MoveResult result = engine.get_move_with_stats(board, Stone::Black);
 
-    REQUIRE(result.best_move.has_value());
-    REQUIRE(*result.best_move == Pos{9, 4});
+    REQUIRE(!result.best_move.is_sentinel());
+    REQUIRE(result.best_move == Pos{9, 4});
     REQUIRE(result.search_type == SearchType::ImmediateWin);
 }
 
@@ -45,8 +45,8 @@ TEST_CASE("test_engine_blocks_opponent_win", "[engine]") {
     MoveResult result = engine.get_move_with_stats(board, Stone::Black);
 
     // Should block at (9,4) - alpha-beta detects opponent's winning threat
-    REQUIRE(result.best_move.has_value());
-    REQUIRE(*result.best_move == Pos{9, 4});
+    REQUIRE(!result.best_move.is_sentinel());
+    REQUIRE(result.best_move == Pos{9, 4});
 }
 
 TEST_CASE("test_engine_empty_board", "[engine]") {
@@ -77,6 +77,7 @@ TEST_CASE("test_opening_book_disrupts_diagonal", "[engine]") {
     // Also verify through the full pipeline
     AIEngine engine2;
     MoveResult move_result = engine2.get_move_with_stats(board, Stone::White);
+    REQUIRE(!move_result.best_move.is_sentinel());
     REQUIRE(move_result.best_move == Pos{8, 10});
 }
 
@@ -107,7 +108,7 @@ TEST_CASE("test_engine_vcf_detection", "[engine]") {
     MoveResult result = engine.get_move_with_stats(board, Stone::Black);
 
     // Should find immediate win
-    REQUIRE(result.best_move.has_value());
+    REQUIRE(!result.best_move.is_sentinel());
     REQUIRE(result.search_type == SearchType::ImmediateWin);
 }
 
@@ -214,7 +215,7 @@ TEST_CASE("test_move_result_types", "[engine]") {
     REQUIRE(defense.search_type == SearchType::Defense);
 
     MoveResult no_move = MoveResult::no_move(50);
-    REQUIRE(!no_move.best_move.has_value());
+    REQUIRE(no_move.best_move.is_sentinel());
 }
 
 TEST_CASE("test_engine_responds_to_threat", "[engine]") {
@@ -231,9 +232,9 @@ TEST_CASE("test_engine_responds_to_threat", "[engine]") {
     MoveResult result = engine.get_move_with_stats(board, Stone::Black);
 
     // Should find blocking move
-    REQUIRE(result.best_move.has_value());
+    REQUIRE(!result.best_move.is_sentinel());
     // Should block at one of the ends
-    Pos m = *result.best_move;
+    Pos m = result.best_move;
     bool blocked = (m == Pos{9, 5} || m == Pos{9, 10});
     REQUIRE(blocked);
 }
@@ -302,8 +303,8 @@ TEST_CASE("test_engine_blocks_gap_pattern", "[engine]") {
     MoveResult result = engine.get_move_with_stats(board, Stone::White);
 
     // White MUST block at M12 (7, 12) - the gap position
-    REQUIRE(result.best_move.has_value());
-    Pos block_pos = *result.best_move;
+    REQUIRE(!result.best_move.is_sentinel());
+    Pos block_pos = result.best_move;
     REQUIRE(block_pos == Pos{7, 12});
 }
 
@@ -321,8 +322,8 @@ TEST_CASE("test_engine_blocks_horizontal_gap", "[engine]") {
     AIEngine engine(8, 6, 500);
     MoveResult result = engine.get_move_with_stats(board, Stone::White);
 
-    REQUIRE(result.best_move.has_value());
-    Pos block_pos = *result.best_move;
+    REQUIRE(!result.best_move.is_sentinel());
+    Pos block_pos = result.best_move;
     REQUIRE(block_pos == Pos{9, 7});
 }
 
@@ -366,7 +367,7 @@ TEST_CASE("test_mid_game_search_quality", "[engine]") {
     MoveResult result = engine.get_move_with_stats(board, Stone::Black);
 
     // Should find a reasonable move - via alpha-beta depth 8+ or VCF/VCT forced win
-    REQUIRE(result.best_move.has_value());
+    REQUIRE(!result.best_move.is_sentinel());
     bool found_forced = result.search_type == SearchType::VCF ||
                        result.search_type == SearchType::ImmediateWin;
     REQUIRE((result.depth >= 8 || found_forced));
@@ -422,8 +423,8 @@ TEST_CASE("test_engine_breaks_existing_five", "[engine]") {
     AIEngine engine;
     MoveResult result = engine.get_move_with_stats(board, Stone::White);
 
-    REQUIRE(result.best_move.has_value());
-    Pos ai_move = *result.best_move;
+    REQUIRE(!result.best_move.is_sentinel());
+    Pos ai_move = result.best_move;
 
     // Verify the AI's move actually breaks the five:
     // Place the stone and check if a capture removes part of the five
@@ -463,7 +464,7 @@ TEST_CASE("test_depth_collapse_regression", "[engine]") {
     AIEngine engine;
     MoveResult result = engine.get_move_with_stats(board, Stone::White);
 
-    REQUIRE(result.best_move.has_value());
+    REQUIRE(!result.best_move.is_sentinel());
     bool found_forced = std::abs(result.score) >= 799900 ||
         result.search_type == SearchType::VCF ||
         result.search_type == SearchType::ImmediateWin;
@@ -612,8 +613,8 @@ TEST_CASE("test_game5_move16_white_immediate_win", "[engine]") {
     // Full engine pipeline should find M9 as immediate win (illusory break)
     AIEngine engine;
     MoveResult move_result = engine.get_move_with_stats(board, Stone::White);
-    REQUIRE(move_result.best_move.has_value());
-    REQUIRE(*move_result.best_move == m9);
+    REQUIRE(!move_result.best_move.is_sentinel());
+    REQUIRE(move_result.best_move == m9);
     REQUIRE(move_result.search_type == SearchType::ImmediateWin);
 }
 
@@ -642,12 +643,12 @@ TEST_CASE("test_game5_post_capture_search", "[engine]") {
     MoveResult result = engine.get_move_with_stats(board, Stone::Black);
 
     // Just verify search completes without crashing
-    REQUIRE(result.best_move.has_value());
+    REQUIRE(!result.best_move.is_sentinel());
 
     // Run search for White too (to compare)
     AIEngine engine2(20, 10, 2000);
     MoveResult result_w = engine2.get_move_with_stats(board, Stone::White);
-    REQUIRE(result_w.best_move.has_value());
+    REQUIRE(!result_w.best_move.is_sentinel());
 }
 
 TEST_CASE("test_game5_k11_l10_white_perspective", "[engine]") {

@@ -207,7 +207,7 @@ void UIPanel::draw_playing(sf::RenderWindow& window, const Board& board,
     }
 
     // AI search stats
-    if (last_ai_result.best_move.has_value()) {
+    if (!last_ai_result.best_move.is_sentinel()) {
         sep.setPosition(text_x, y);
         window.draw(sep);
         y += 15;

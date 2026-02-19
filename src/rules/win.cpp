@@ -15,7 +15,12 @@ static constexpr int DIRECTIONS[4][2] = {
 };
 
 bool has_five_in_row(const Board& board, Stone stone) {
-    return find_five_positions(board, stone).has_value();
+    const Bitboard* bb = board.stones(stone);
+    if (!bb) return false;
+    for (auto pos : *bb) {
+        if (has_five_at_pos(board, pos, stone)) return true;
+    }
+    return false;
 }
 
 bool has_five_at_pos(const Board& board, Pos pos, Stone color) {
@@ -219,20 +224,29 @@ std::vector<Pos> find_five_break_moves(
     return break_moves;
 }
 
-std::optional<Stone> check_winner(const Board& board) {
+std::optional<Stone> check_winner(const Board& board, Stone last_player) {
     // Check capture win first (5 pairs = 10 stones)
     if (board.captures(Stone::Black) >= 5) return Stone::Black;
     if (board.captures(Stone::White) >= 5) return Stone::White;
 
-    // Check 5-in-a-row win
-    for (Stone stone : {Stone::Black, Stone::White}) {
-        auto five = find_five_positions(board, stone);
-        if (five.has_value()) {
-            // Endgame capture rule: if opponent can break it, no win yet
-            if (!can_break_five_by_capture(board, five.value(), stone)) {
-                return stone;
-            }
+    Stone other = opponent(last_player);
+
+    // 1. If the OTHER player already had a five on the board,
+    //    last_player just moved and didn't break it → other wins.
+    auto other_five = find_five_positions(board, other);
+    if (other_five.has_value()) {
+        return other;
+    }
+
+    // 2. If last_player just formed a five:
+    //    - Unbreakable → last_player wins immediately.
+    //    - Breakable → game continues (other gets one turn to break it).
+    auto my_five = find_five_positions(board, last_player);
+    if (my_five.has_value()) {
+        if (!can_break_five_by_capture(board, my_five.value(), last_player)) {
+            return last_player;
         }
+        // Breakable: game continues, other player gets a chance
     }
 
     return std::nullopt;

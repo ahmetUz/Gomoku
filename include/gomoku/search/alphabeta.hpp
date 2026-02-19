@@ -41,7 +41,7 @@ struct SearchStats {
 
 // Search result containing the best move found and associated statistics
 struct SearchResult {
-    std::optional<Pos> best_move;
+    Pos best_move = Pos::sentinel();
     int32_t score = 0;
     int8_t depth = 0;
     uint64_t nodes = 0;
