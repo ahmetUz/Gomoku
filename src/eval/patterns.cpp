@@ -1,4 +1,9 @@
-// Pattern scoring implementation -- capture-based scoring
+// Score de capture -- evaluation non-lineaire des paires capturees
+//
+// En Ninuki-renju, capturer 5 paires gagne la partie. Le score augmente
+// de facon exponentielle avec le nombre de captures : plus on approche
+// de 5 paires, plus chaque capture supplementaire est strategiquement
+// decisive. A 4 paires, la menace est quasi-imparable.
 
 #include "gomoku/eval/patterns.hpp"
 #include <algorithm>

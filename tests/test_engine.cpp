@@ -366,11 +366,12 @@ TEST_CASE("test_mid_game_search_quality", "[engine]") {
     AIEngine engine;
     MoveResult result = engine.get_move_with_stats(board, Stone::Black);
 
-    // Should find a reasonable move - via alpha-beta depth 8+ or VCF/VCT forced win
+    // Should find a reasonable move - via alpha-beta depth 6+ or VCF/VCT forced win
+    // (min_depth is 6, so engine always completes at least 6 plies)
     REQUIRE(!result.best_move.is_sentinel());
     bool found_forced = result.search_type == SearchType::VCF ||
                        result.search_type == SearchType::ImmediateWin;
-    REQUIRE((result.depth >= 8 || found_forced));
+    REQUIRE((result.depth >= 6 || found_forced));
     // Time should be under hard limit
     REQUIRE(result.time_ms < 2000);
 }

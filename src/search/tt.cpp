@@ -1,7 +1,20 @@
-// Transposition Table for caching search results
+// Table de transposition (TT) -- memoire cache des resultats de recherche
 //
-// The transposition table stores search results indexed by board hash,
-// enabling reuse of previous search results for positions we've seen before.
+// Quand le moteur evalue une position, il stocke le resultat dans une grande
+// table indexee par le hash de la position. Si la meme position se presente
+// plus tard (par une autre sequence de coups), on reutilise le resultat au
+// lieu de tout recalculer. C'est comme si le moteur se souvenait des
+// positions qu'il a deja vues.
+//
+// Deux implementations :
+// - TranspositionTable : version simple, mono-thread (pour les tests)
+// - AtomicTT : version lock-free pour la recherche parallele (Lazy SMP)
+//   Utilise le "XOR trick" de Hyatt (1994) : on stocke key = hash XOR data.
+//   En lecture, si (key XOR data) != hash attendu, c'est une lecture
+//   corrompue (torn read) et on ignore l'entree. Pas besoin de mutex.
+//
+// Chaque entree contient : profondeur, score, type (exact/borne), meilleur coup.
+// Le tout est compresse en 42 bits pour tenir dans un seul uint64_t atomique.
 
 #include "gomoku/search/tt.hpp"
 #include <algorithm>

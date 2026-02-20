@@ -113,6 +113,10 @@ if(BUILD_GUI)
     )
 endif()
 
+# Benchmark target
+add_executable(gomoku_bench bench/benchmark.cpp)
+target_link_libraries(gomoku_bench PRIVATE gomoku_lib)
+
 # Tests (optional, enabled by default)
 option(BUILD_TESTS "Build unit tests" ON)
 if(BUILD_TESTS)

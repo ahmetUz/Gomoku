@@ -1,4 +1,21 @@
-// Heuristic evaluation implementation -- single-pass pattern + position scoring
+// Evaluation heuristique -- le "jugement" du moteur sur une position
+//
+// Cette fonction attribue un score a une position du plateau sans chercher
+// plus loin dans l'arbre. C'est l'equivalent du "coup d'oeil" d'un joueur
+// experimente. On combine plusieurs criteres :
+//
+// 1) Patterns de ligne : on scanne les 4 directions pour chaque pierre
+//    et on detecte les motifs (cinq, quatre ouvert/ferme, trois ouvert, etc.)
+//    C'est le critere le plus important.
+// 2) Bonus de position : les pierres proches du centre valent plus.
+//    Au Gomoku, le centre donne plus de liberte directionnelle.
+// 3) Connectivite : les pierres adjacentes aux siennes recoivent un bonus.
+// 4) Vulnerabilite aux captures : les paires capturable par l'adversaire
+//    recoivent une penalite proportionnelle au nombre de captures adverses.
+// 5) Combinaisons de menaces : double quatre, quatre + trois ouvert, etc.
+//    Ces combinaisons sont souvent imblocables et valent un bonus enorme.
+//
+// L'evaluation est symetrique pour le negamax : eval(board, Black) == -eval(board, White).
 
 #include "gomoku/eval/heuristic.hpp"
 #include "gomoku/eval/patterns.hpp"
@@ -160,52 +177,43 @@ static std::pair<int, int> evaluate_color(const Board& board, Stone color) {
         int dist = std::abs(int(pos.row) - center) + std::abs(int(pos.col) - center);
         score += (MAX_CENTER_DIST - dist) * POSITION_WEIGHT;
 
-        // --- Connectivity bonus: unidirectional (positive only) ---
-        // Each adjacent pair counted once from the stone with lower dir offset.
-        for (const auto& dir : DIRECTIONS) {
-            int nr = pos.row + dir[0];
-            int nc = pos.col + dir[1];
-            if (Pos::is_valid(nr, nc) &&
-                my_bb->get(Pos{uint8_t(nr), uint8_t(nc)}))
-            {
-                score += 160;
-            }
-        }
-
-        // --- Vulnerability: ally-ally pair capturable by opponent ---
+        // --- Connectivity bonus + Vulnerability (fused, single direction loop) ---
         for (const auto& dir : DIRECTIONS) {
             int dr = dir[0], dc = dir[1];
             int r1 = pos.row + dr;
             int c1 = pos.col + dc;
             if (!Pos::is_valid(r1, c1)) continue;
             Pos p1{uint8_t(r1), uint8_t(c1)};
-            if (!my_bb->get(p1)) continue;
 
-            int rb = pos.row - dr;
-            int cb = pos.col - dc;
-            int ra = r1 + dr;
-            int ca = c1 + dc;
+            bool neighbor_is_mine = my_bb->get(p1);
 
-            // Before position (rb, cb)
-            bool b_empty = false, b_opp = false;
-            if (Pos::is_valid(rb, cb)) {
-                Pos pb{uint8_t(rb), uint8_t(cb)};
-                b_opp = opp_bb->get(pb);
-                b_empty = !b_opp && !my_bb->get(pb);
+            // Connectivity bonus (unidirectional, positive only)
+            if (neighbor_is_mine) score += 160;
+
+            // Vulnerability: ally-ally pair capturable by opponent
+            if (neighbor_is_mine) {
+                int rb = pos.row - dr;
+                int cb = pos.col - dc;
+                int ra = r1 + dr;
+                int ca = c1 + dc;
+
+                bool b_empty = false, b_opp = false;
+                if (Pos::is_valid(rb, cb)) {
+                    Pos pb{uint8_t(rb), uint8_t(cb)};
+                    b_opp = opp_bb->get(pb);
+                    b_empty = !b_opp && !my_bb->get(pb);
+                }
+
+                bool a_empty = false, a_opp = false;
+                if (Pos::is_valid(ra, ca)) {
+                    Pos pa{uint8_t(ra), uint8_t(ca)};
+                    a_opp = opp_bb->get(pa);
+                    a_empty = !a_opp && !my_bb->get(pa);
+                }
+
+                if (b_empty && a_opp) vuln++;
+                if (b_opp && a_empty) vuln++;
             }
-
-            // After position (ra, ca)
-            bool a_empty = false, a_opp = false;
-            if (Pos::is_valid(ra, ca)) {
-                Pos pa{uint8_t(ra), uint8_t(ca)};
-                a_opp = opp_bb->get(pa);
-                a_empty = !a_opp && !my_bb->get(pa);
-            }
-
-            // empty-ally-ally-opp: opponent plays at empty to capture
-            if (b_empty && a_opp) vuln++;
-            // opp-ally-ally-empty: opponent plays at empty to capture
-            if (b_opp && a_empty) vuln++;
         }
     }
 

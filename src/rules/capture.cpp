@@ -1,4 +1,14 @@
-// Capture rules implementation -- Pente-style pair capture (X-OO-X)
+// Regles de capture -- capture de paires style Pente (X-OO-X)
+//
+// En Ninuki-renju, quand un joueur pose une pierre et encadre une paire
+// adverse avec ses propres pierres (motif X-OO-X), la paire adverse est
+// retiree du plateau. Capturer 5 paires (10 pierres) gagne la partie.
+//
+// execute_captures_fast : version optimisee qui stocke les positions
+// capturees dans un tableau fixe (CaptureInfo, pas de std::vector)
+// pour eviter les allocations memoire dans les chemins chauds de la
+// recherche. undo_captures permet de "defaire" la capture pour le
+// backtracking de l'alpha-beta.
 
 #include "gomoku/rules/capture.hpp"
 

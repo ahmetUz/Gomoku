@@ -70,10 +70,10 @@ struct MoveResult {
 // Integrates VCF/VCT threat search, alpha-beta with transposition table,
 // and immediate win/loss detection into a priority-based search pipeline.
 //
-// Default config: 64 MB TT, depth 20, 500ms time limit.
+// Default config: 16 MB TT, depth 20, 500ms time limit.
 class AIEngine {
 public:
-    // Create with default settings (64 MB TT, depth 20, 500ms).
+    // Create with default settings (16 MB TT, depth 20, 500ms).
     AIEngine();
 
     // Create with custom configuration.

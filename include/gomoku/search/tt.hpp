@@ -1,13 +1,13 @@
 #pragma once
 
-// Transposition Table for caching search results
+// Table de transposition -- memoire cache des positions evaluees
 //
-// Two implementations:
-// 1. TranspositionTable -- single-threaded, uses std::optional<TTEntry>
-// 2. AtomicTT -- lock-free for Lazy SMP parallel search (XOR trick, Hyatt 1994)
-//
-// The AtomicTT packs entries into two uint64_t atomics per slot:
-//   key = hash ^ data (XOR trick: torn reads cause hash mismatch = safe miss)
+// Deux implementations :
+// 1. TranspositionTable : mono-thread, pour les tests (std::optional<TTEntry>)
+// 2. AtomicTT : lock-free pour la recherche parallele Lazy SMP
+//    Utilise le XOR trick (Hyatt 1994) : key = hash XOR data.
+//    Les lectures corrompues (torn reads) donnent un hash different
+//    et sont ignorees silencieusement. Pas besoin de verrous.
 
 #include "gomoku/board/types.hpp"
 #include <cstdint>

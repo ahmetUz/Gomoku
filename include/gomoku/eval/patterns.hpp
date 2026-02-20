@@ -1,9 +1,10 @@
 #pragma once
 
-// Pattern scores for Gomoku evaluation
+// Scores des patterns -- echelle de valeur des motifs au Gomoku
 //
-// These constants define the scoring weights for various board patterns.
-// Carefully tuned for strong play with Ninuki-renju rules.
+// Chaque motif (cinq, quatre ouvert, trois ouvert, etc.) a une valeur
+// numerique qui reflete sa dangerosité. L'echelle est soigneusement
+// calibree pour les regles Ninuki-renju avec captures de paires.
 
 #include <cstdint>
 

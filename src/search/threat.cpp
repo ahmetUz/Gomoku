@@ -1,11 +1,24 @@
-// VCF/VCT threat search for forced wins
+// Recherche de menaces VCF/VCT -- detection de victoires forcees
 //
-// This module implements specialized threat-space search algorithms:
-// - VCF (Victory by Continuous Fours): Finds winning sequences using only four-threats
-// - VCT (Victory by Continuous Threats): More general, includes open-three threats
+// VCF (Victory by Continuous Fours) : on cherche a gagner en enchainant
+// uniquement des "quatres" (4 pierres alignees avec un bout ouvert).
+// L'adversaire est FORCE de bloquer chaque quatre, donc on controle
+// entierement la partie. Si a un moment l'adversaire ne peut plus
+// bloquer, on gagne. C'est tres rapide car l'arbre est tres etroit
+// (une seule reponse possible a chaque etape).
 //
-// These are powerful pruning techniques that can find forced wins much faster
-// than regular alpha-beta search by only considering forcing moves.
+// VCT (Victory by Continuous Threats) : version plus generale qui
+// inclut aussi les "trois ouverts" comme menaces. L'arbre est plus
+// large (l'adversaire a plus de reponses possibles) mais peut trouver
+// des victoires que le VCF rate.
+//
+// Ces recherches sont lancees AVANT l'alpha-beta : si on trouve une
+// victoire forcee, pas besoin de chercher plus loin.
+//
+// Subtilite Ninuki : les captures peuvent servir de defense. Un
+// adversaire menace par un quatre peut capturer une paire du quatre
+// au lieu de bloquer, ou s'il a 3+ captures, toute capture le
+// rapproche d'une victoire par captures et compte comme defense.
 
 #include "gomoku/search/threat.hpp"
 #include "gomoku/rules/capture.hpp"

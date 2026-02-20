@@ -1,4 +1,12 @@
-// Win condition checking -- five-in-a-row and capture win
+// Verification des conditions de victoire -- cinq a la suite et captures
+//
+// En Ninuki-renju, on gagne soit en alignant 5 pierres (ou plus), soit
+// en capturant 5 paires adverses. Mais il y a une subtilite : un cinq
+// n'est pas forcement definitif. Si l'adversaire peut capturer une paire
+// qui fait partie du cinq (motif X-OO-X sur les pierres du cinq), le
+// cinq est "cassable" et l'adversaire a un tour pour le briser.
+// C'est check_winner qui gere cette logique : si le cinq est cassable,
+// la partie continue.
 
 #include "gomoku/rules/win.hpp"
 #include "gomoku/rules/capture.hpp"

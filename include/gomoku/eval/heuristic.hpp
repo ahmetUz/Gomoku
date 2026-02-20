@@ -1,15 +1,11 @@
 #pragma once
 
-// Heuristic evaluation function for Gomoku board positions
+// Evaluation heuristique -- le "jugement" statique du moteur
 //
-// Evaluates board positions based on:
-// - Win/loss detection (capture win)
-// - Pattern scoring (fives, fours, threes, twos)
-// - Capture advantage (non-linear)
-// - Positional bonuses (center control, connectivity)
-// - Vulnerability penalty (capturable pairs)
-//
-// SYMMETRIC for negamax: evaluate(board, Black) == -evaluate(board, White)
+// Attribue un score a une position sans chercher plus loin dans l'arbre.
+// Combine : patterns de ligne, avantage de captures, controle du centre,
+// connectivite des pierres, et penalite de vulnerabilite aux captures.
+// Symetrique pour le negamax : evaluate(board, Black) == -evaluate(board, White)
 
 #include "gomoku/board/board.hpp"
 

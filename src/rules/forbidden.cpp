@@ -1,4 +1,16 @@
-// Double-three forbidden move rules implementation
+// Regle du double-trois (coups interdits)
+//
+// En Ninuki-renju, un coup est interdit s'il cree simultanement deux
+// "trois libres" dans deux directions differentes. Un trois libre est
+// un alignement de 3 pierres avec les deux extremites ouvertes (pas
+// bloquees par l'adversaire ou le bord du plateau).
+//
+// Exception : si le coup capture une paire adverse, le double-trois
+// est autorise. C'est logique : la capture change la position et
+// l'un des trois libres peut ne plus en etre un apres la capture.
+//
+// Le scan detecte les patterns avec ou sans "trou" (ex: OO_O = trois
+// avec un trou, qui reste un trois libre si les deux bouts sont ouverts).
 
 #include "gomoku/rules/forbidden.hpp"
 #include "gomoku/rules/capture.hpp"

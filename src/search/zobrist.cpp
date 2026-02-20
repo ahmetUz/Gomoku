@@ -1,12 +1,26 @@
+// Hachage de Zobrist -- identification rapide des positions
+//
+// Le hachage de Zobrist attribue un nombre aleatoire unique a chaque
+// combinaison (case, couleur) du plateau. Le hash d'une position est le
+// XOR de tous ces nombres pour les pierres presentes. L'avantage : quand
+// on pose ou retire une pierre, on met a jour le hash en un seul XOR
+// (O(1)) au lieu de tout recalculer. C'est ce qui rend la table de
+// transposition efficace.
+//
+// La table de nombres aleatoires est generee de facon deterministe (LCG
+// de Knuth) pour que les hash soient reproductibles d'une execution a
+// l'autre. Le hash inclut aussi le joueur au trait et les compteurs de
+// captures, car deux positions identiques avec des captures differentes
+// ont des proprietes strategiques differentes.
+
 #include "gomoku/search/zobrist.hpp"
 #include <algorithm>
 
 namespace gomoku {
 
 ZobristTable::ZobristTable() {
-    // Use a simple LCG for deterministic "random" values
-    // Same seed = same table = reproducible hashes
-    // Constants from Knuth's MMIX LCG
+    // Generateur congruentiel lineaire (LCG) de Knuth : deterministe,
+    // toujours les memes valeurs pour le meme seed = hash reproductibles.
     uint64_t seed = 0x1234'5678'9ABC'DEF0;
     auto next_rand = [&seed]() -> uint64_t {
         seed = seed * 6'364'136'223'846'793'005ULL + 1;

@@ -4,8 +4,9 @@
 #include <cstdint>
 
 
-// ? Bitboard representation to use 6x uint64_t to represent the 361 cells of the board (6*64=384 >= 361).
-// ? It avoid the iteration of 19x19 cells for each operations on the board, and allows to make 6 instructions to CPU check the whole board, instead of 361 instructions. Essential for pattern matching and evaluation.
+// Bitboard -- representation compacte du plateau en 6 x uint64_t (384 >= 361 cases).
+// Au lieu de parcourir 361 cases une par une, on traite 64 bits d'un coup.
+// Indispensable pour les scans de patterns et l'evaluation rapide.
 namespace gomoku {
 
 // Forward declaration for the iterator

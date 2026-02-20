@@ -1,3 +1,11 @@
+// Bitboard -- representation compacte du plateau en tableaux de bits
+//
+// Au lieu de stocker chaque case dans un tableau 19x19, on utilise
+// 6 entiers de 64 bits (6 x 64 = 384 bits, assez pour 361 cases).
+// Chaque bit represente une case : 1 = pierre presente, 0 = vide.
+// Avantage : les operations (compter les pierres, tester une case)
+// deviennent des operations bit-a-bit ultra rapides.
+
 #include "gomoku/board/bitboard.hpp"
 
 namespace gomoku {

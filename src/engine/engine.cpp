@@ -1,3 +1,21 @@
+// Moteur IA principal -- orchestration de toutes les recherches
+//
+// Ce fichier coordonne la pipeline de decision de l'IA. Chaque coup
+// passe par une cascade de verifications, du plus simple au plus complexe :
+//
+// 0) Livre d'ouverture (les 1-3 premiers coups sont precomputes)
+// 0.5) Casser un cinq adverse cassable (priorite absolue)
+// 1) Victoire immediate (cinq ou 5e capture)
+// 2) Bloquer la victoire immediate de l'adversaire
+// 3) VCF (victoire forcee par quatres continus)
+// 4) Bloquer le VCF adverse
+// 5) Recherche alpha-beta (pour tout le reste)
+//
+// Cette cascade est fondamentale : si l'adversaire a un cinq cassable,
+// on DOIT le casser maintenant, sinon il gagne au tour suivant.
+// Le temps de recherche est adaptatif : moins en ouverture, plein
+// temps en milieu de partie quand les positions sont complexes.
+
 #include "gomoku/engine/engine.hpp"
 #include "gomoku/search/tt.hpp"
 #include "gomoku/rules/capture.hpp"
@@ -144,7 +162,7 @@ MoveResult MoveResult::alpha_beta(Pos pos, int32_t score, uint64_t time_ms, uint
 // AIEngine implementation
 
 AIEngine::AIEngine()
-    : searcher_(64)
+    : searcher_(16)
     , threat_searcher_(30, 12)
     , max_depth_(20)
     , time_limit_ms_(500)

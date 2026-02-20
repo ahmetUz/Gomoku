@@ -65,7 +65,7 @@ public:
     SearchResult search(const Board& board, Stone color, int8_t max_depth);
 
     // Timed search with Lazy SMP parallel search.
-    // Minimum depth 10, soft time limit with prediction-based cutoff.
+    // Minimum depth 6, soft time limit with prediction-based cutoff.
     SearchResult search_timed(const Board& board, Stone color,
                               int8_t max_depth, uint64_t time_limit_ms);
 

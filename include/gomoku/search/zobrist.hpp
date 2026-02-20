@@ -1,12 +1,12 @@
 #pragma once
 
-// Zobrist hashing for position identification
+// Hachage de Zobrist -- identification rapide des positions
 //
-// Zobrist hashing allows O(1) incremental hash updates when placing/removing
-// stones. Essential for efficient transposition table lookups during search.
-//
-// Uses a deterministic LCG (Knuth's MMIX constants) with fixed seed
-// so that hashes are reproducible across runs.
+// Chaque position du plateau a un hash unique calcule en O(1) par
+// simple XOR quand on pose ou retire une pierre. C'est ce qui rend
+// la table de transposition efficace : on identifie instantanement
+// si une position a deja ete evaluee.
+// Generateur deterministe (LCG de Knuth, seed fixe) pour la reproductibilite.
 
 #include "gomoku/board/board.hpp"
 #include <cstdint>

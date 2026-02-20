@@ -89,7 +89,8 @@ TEST_CASE("tt_stats_after_search", "[alphabeta]") {
 
     board.place_stone(Pos(9, 9), Stone::Black);
 
-    searcher.search(board, Stone::White, 4);
+    // Depth 6 ensures enough TT entries to be detected by sampling
+    searcher.search(board, Stone::White, 6);
 
     TTStats stats = searcher.tt_stats();
     REQUIRE(stats.used > 0);
@@ -100,7 +101,7 @@ TEST_CASE("clear_tt", "[alphabeta]") {
     Board board;
 
     board.place_stone(Pos(9, 9), Stone::Black);
-    searcher.search(board, Stone::White, 4);
+    searcher.search(board, Stone::White, 6);
 
     TTStats stats_before = searcher.tt_stats();
     REQUIRE(stats_before.used > 0);
