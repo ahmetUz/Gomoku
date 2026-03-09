@@ -70,6 +70,7 @@ public:
                               int8_t max_depth, uint64_t time_limit_ms);
 
     void clear_history();
+    void stop();  // Set stopped flag to abort search immediately
     TTStats tt_stats() const;
     void clear_tt() const;
 

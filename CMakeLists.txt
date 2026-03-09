@@ -5,13 +5,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ── ccache (speeds up rebuilds if installed) ──────────────────────────────────
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    message(STATUS "Using ccache: ${CCACHE_PROGRAM}")
+endif()
+
 # Compiler flags
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 # Release flags
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
-# Library target (all source except main.cpp)
+# ── Core library (engine, search, board, rules, eval) ─────────────────────────
 file(GLOB_RECURSE LIB_SOURCES
     src/board/*.cpp
     src/rules/*.cpp
@@ -24,11 +31,11 @@ add_library(gomoku_lib STATIC ${LIB_SOURCES})
 target_include_directories(gomoku_lib PUBLIC include)
 target_link_libraries(gomoku_lib PUBLIC pthread)
 
-# Executable target
+# ── CLI executable ────────────────────────────────────────────────────────────
 add_executable(gomoku src/main.cpp)
 target_link_libraries(gomoku PRIVATE gomoku_lib)
 
-# GUI target (optional, requires SFML)
+# ── GUI (optional, requires SFML) ────────────────────────────────────────────
 option(BUILD_GUI "Build SFML GUI" ON)
 if(BUILD_GUI)
     # --- Local deps fallback (deps/ ships headers + lib stubs) ---------------
@@ -86,6 +93,8 @@ if(BUILD_GUI)
         )
         set(SFML_BUILD_AUDIO OFF CACHE BOOL "" FORCE)
         set(SFML_BUILD_NETWORK OFF CACHE BOOL "" FORCE)
+        set(SFML_BUILD_DOC OFF CACHE BOOL "" FORCE)
+        set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(sfml)
     endif()
 
@@ -113,12 +122,14 @@ if(BUILD_GUI)
     )
 endif()
 
-# Benchmark target
-add_executable(gomoku_bench bench/benchmark.cpp)
+# ── Benchmark (not in default build — use: make gomoku_bench) ─────────────────
+add_executable(gomoku_bench EXCLUDE_FROM_ALL bench/benchmark.cpp)
 target_link_libraries(gomoku_bench PRIVATE gomoku_lib)
 
-# Tests (optional, enabled by default)
-option(BUILD_TESTS "Build unit tests" ON)
+# ── Tests (not in default build — use: make gomoku_tests) ─────────────────────
+# Catch2 has 107 compilation units; keeping it out of `make` saves ~55% of
+# clean build time.  Build tests explicitly with `make gomoku_tests`.
+option(BUILD_TESTS "Fetch Catch2 and register test target" ON)
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

@@ -32,7 +32,7 @@ void UIPanel::draw_button(sf::RenderWindow& window, const sf::FloatRect& rect,
 
 // ─── Menu ───────────────────────────────────────────────────────────────────
 
-void UIPanel::draw_menu(sf::RenderWindow& window) const {
+void UIPanel::draw_menu(sf::RenderWindow& window, sf::Vector2f mouse_pos) const {
     sf::RectangleShape bg(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT));
     bg.setFillColor(sf::Color(40, 40, 45));
     window.draw(bg);
@@ -68,14 +68,14 @@ void UIPanel::draw_menu(sf::RenderWindow& window) const {
     pvw_btn_ = {btn_x, start_y + btn_h + gap, btn_w, btn_h};
     pvp_btn_ = {btn_x, start_y + 2 * (btn_h + gap), btn_w, btn_h};
 
-    draw_button(window, pvb_btn_, "Play as Black vs AI");
-    draw_button(window, pvw_btn_, "Play as White vs AI");
-    draw_button(window, pvp_btn_, "Player vs Player");
+    draw_button(window, pvb_btn_, "Play as Black vs AI", pvb_btn_.contains(mouse_pos.x, mouse_pos.y));
+    draw_button(window, pvw_btn_, "Play as White vs AI", pvw_btn_.contains(mouse_pos.x, mouse_pos.y));
+    draw_button(window, pvp_btn_, "Player vs Player", pvp_btn_.contains(mouse_pos.x, mouse_pos.y));
 
     // Instructions
     sf::Text info;
     info.setFont(*font_);
-    info.setString("ESC to quit  |  U to undo  |  N for new game");
+    info.setString("ESC quit | U undo | N new | H hint");
     info.setCharacterSize(14);
     info.setFillColor(sf::Color(140, 140, 140));
     sf::FloatRect ib = info.getLocalBounds();
@@ -96,7 +96,8 @@ void UIPanel::draw_playing(sf::RenderWindow& window, const Board& board,
                             Stone current_turn, int move_number,
                             std::optional<Pos> last_move,
                             const MoveResult& last_ai_result,
-                            bool ai_thinking, GameMode mode) const {
+                            bool ai_thinking, uint32_t ai_elapsed_ms,
+                            GameMode mode, sf::Vector2f mouse_pos) const {
     // Panel background
     float px = BOARD_PANEL_WIDTH;
     sf::RectangleShape panel(sf::Vector2f(SIDE_PANEL_WIDTH, WINDOW_HEIGHT));
@@ -166,7 +167,9 @@ void UIPanel::draw_playing(sf::RenderWindow& window, const Board& board,
     if (ai_thinking) {
         sf::Text thinking;
         thinking.setFont(*font_);
-        thinking.setString("AI thinking...");
+        std::string timer_str = "AI thinking... "
+            + std::to_string(ai_elapsed_ms) + " ms";
+        thinking.setString(timer_str);
         thinking.setCharacterSize(14);
         thinking.setFillColor(sf::Color(100, 200, 255));
         thinking.setPosition(text_x + 24, y - 2);
@@ -257,11 +260,13 @@ void UIPanel::draw_playing(sf::RenderWindow& window, const Board& board,
     float btn_h = 36;
     float btn_x = px + 20;
 
+    hint_btn_     = {btn_x, static_cast<float>(WINDOW_HEIGHT - 180), btn_w, btn_h};
     undo_btn_     = {btn_x, static_cast<float>(WINDOW_HEIGHT - 130), btn_w, btn_h};
     new_game_btn_ = {btn_x, static_cast<float>(WINDOW_HEIGHT - 80),  btn_w, btn_h};
 
-    draw_button(window, undo_btn_, "Undo (U)");
-    draw_button(window, new_game_btn_, "New Game (N)");
+    draw_button(window, hint_btn_, "Hint (H)", hint_btn_.contains(mouse_pos.x, mouse_pos.y));
+    draw_button(window, undo_btn_, "Undo (U)", undo_btn_.contains(mouse_pos.x, mouse_pos.y));
+    draw_button(window, new_game_btn_, "Menu (ESC)", new_game_btn_.contains(mouse_pos.x, mouse_pos.y));
 }
 
 // ─── Game over overlay ──────────────────────────────────────────────────────
@@ -306,6 +311,10 @@ void UIPanel::draw_game_over(sf::RenderWindow& window, Stone winner,
     sub.setPosition(BOARD_PANEL_WIDTH / 2.0f - sb.width / 2 - sb.left,
                     WINDOW_HEIGHT / 2.0f + 10);
     window.draw(sub);
+}
+
+bool UIPanel::is_hint_clicked(float x, float y) const {
+    return hint_btn_.contains(x, y);
 }
 
 bool UIPanel::is_undo_clicked(float x, float y) const {

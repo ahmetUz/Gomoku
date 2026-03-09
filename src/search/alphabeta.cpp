@@ -2084,6 +2084,10 @@ void Searcher::clear_history() {
     std::memset(history_, 0, sizeof(history_));
 }
 
+void Searcher::stop() {
+    shared_->stopped.store(true, std::memory_order_relaxed);
+}
+
 TTStats Searcher::tt_stats() const {
     return shared_->tt.stats();
 }

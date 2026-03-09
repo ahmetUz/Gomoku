@@ -10,89 +10,105 @@ static char col_label(int col) {
 
 void BoardRenderer::init(const sf::Font& font) {
     font_ = &font;
-}
 
-void BoardRenderer::draw(sf::RenderWindow& window, const Board& board,
-                          std::optional<Pos> last_move, std::optional<Pos> hover_pos,
-                          Stone hover_color) const {
-    draw_background(window);
-    draw_grid(window);
-    draw_hoshi(window);
-    draw_coordinates(window);
-    draw_stones(window, board, last_move);
-    if (hover_pos.has_value()) {
-        draw_hover(window, *hover_pos, hover_color);
-    }
-}
+    // Background
+    bg_.setSize(sf::Vector2f(BOARD_PANEL_WIDTH, WINDOW_HEIGHT));
+    bg_.setFillColor(BOARD_COLOR);
 
-void BoardRenderer::draw_background(sf::RenderWindow& window) const {
-    sf::RectangleShape bg(sf::Vector2f(BOARD_PANEL_WIDTH, WINDOW_HEIGHT));
-    bg.setFillColor(BOARD_COLOR);
-    window.draw(bg);
-}
-
-void BoardRenderer::draw_grid(sf::RenderWindow& window) const {
+    // Grid lines (19 vertical + 19 horizontal = 76 vertices)
+    grid_lines_.setPrimitiveType(sf::Lines);
+    grid_lines_.resize(76);
     for (int i = 0; i < 19; ++i) {
         // Vertical line (column i)
         sf::Vector2f top = pos_to_pixel(18, i);
         sf::Vector2f bot = pos_to_pixel(0, i);
-        sf::Vertex vline[] = {
-            sf::Vertex(top, GRID_COLOR),
-            sf::Vertex(bot, GRID_COLOR)
-        };
-        window.draw(vline, 2, sf::Lines);
+        grid_lines_[i * 2]     = sf::Vertex(top, GRID_COLOR);
+        grid_lines_[i * 2 + 1] = sf::Vertex(bot, GRID_COLOR);
 
         // Horizontal line (row i)
-        sf::Vector2f left = pos_to_pixel(i, 0);
+        sf::Vector2f left  = pos_to_pixel(i, 0);
         sf::Vector2f right = pos_to_pixel(i, 18);
-        sf::Vertex hline[] = {
-            sf::Vertex(left, GRID_COLOR),
-            sf::Vertex(right, GRID_COLOR)
-        };
-        window.draw(hline, 2, sf::Lines);
+        grid_lines_[38 + i * 2]     = sf::Vertex(left, GRID_COLOR);
+        grid_lines_[38 + i * 2 + 1] = sf::Vertex(right, GRID_COLOR);
     }
-}
 
-void BoardRenderer::draw_hoshi(sf::RenderWindow& window) const {
+    // Hoshi points
+    hoshi_dots_.reserve(HOSHI_POINTS.size());
     for (auto [r, c] : HOSHI_POINTS) {
         sf::CircleShape dot(HOSHI_RADIUS);
         dot.setFillColor(GRID_COLOR);
         dot.setOrigin(HOSHI_RADIUS, HOSHI_RADIUS);
         dot.setPosition(pos_to_pixel(r, c));
-        window.draw(dot);
+        hoshi_dots_.push_back(dot);
     }
-}
 
-void BoardRenderer::draw_coordinates(sf::RenderWindow& window) const {
-    sf::Text text;
-    text.setFont(*font_);
-    text.setCharacterSize(12);
-    text.setFillColor(GRID_COLOR);
-
-    // Column labels (A-T, skip I)
+    // Coordinate labels (19 columns x 2 + 19 rows x 2 = 76 labels)
+    coord_labels_.reserve(76);
     for (int c = 0; c < 19; ++c) {
         std::string label(1, col_label(c));
+
+        sf::Text text;
+        text.setFont(*font_);
         text.setString(label);
+        text.setCharacterSize(12);
+        text.setFillColor(GRID_COLOR);
         sf::FloatRect bounds = text.getLocalBounds();
         float x = MARGIN_LEFT + c * CELL_SIZE - bounds.width / 2 - bounds.left;
 
-        text.setPosition(x, MARGIN_TOP - 24);
-        window.draw(text);
-        text.setPosition(x, MARGIN_TOP + 18 * CELL_SIZE + 8);
-        window.draw(text);
+        // Top label
+        sf::Text top_label = text;
+        top_label.setPosition(x, MARGIN_TOP - 24);
+        coord_labels_.push_back(top_label);
+
+        // Bottom label
+        sf::Text bot_label = text;
+        bot_label.setPosition(x, MARGIN_TOP + 18 * CELL_SIZE + 8);
+        coord_labels_.push_back(bot_label);
     }
 
-    // Row labels (1-19)
     for (int r = 0; r < 19; ++r) {
         std::string label = std::to_string(r + 1);
+
+        sf::Text text;
+        text.setFont(*font_);
         text.setString(label);
+        text.setCharacterSize(12);
+        text.setFillColor(GRID_COLOR);
         sf::FloatRect bounds = text.getLocalBounds();
         float y = MARGIN_TOP + (18 - r) * CELL_SIZE - bounds.height / 2 - bounds.top - 2;
 
-        text.setPosition(MARGIN_LEFT - 12 - bounds.width, y);
-        window.draw(text);
-        text.setPosition(MARGIN_LEFT + 18 * CELL_SIZE + 8, y);
-        window.draw(text);
+        // Left label
+        sf::Text left_label = text;
+        left_label.setPosition(MARGIN_LEFT - 12 - bounds.width, y);
+        coord_labels_.push_back(left_label);
+
+        // Right label
+        sf::Text right_label = text;
+        right_label.setPosition(MARGIN_LEFT + 18 * CELL_SIZE + 8, y);
+        coord_labels_.push_back(right_label);
+    }
+}
+
+void BoardRenderer::draw(sf::RenderWindow& window, const Board& board,
+                          std::optional<Pos> last_move, std::optional<Pos> hover_pos,
+                          Stone hover_color, std::optional<Pos> hint_pos) const {
+    // Draw cached static elements
+    window.draw(bg_);
+    window.draw(grid_lines_);
+    for (const auto& dot : hoshi_dots_) {
+        window.draw(dot);
+    }
+    for (const auto& label : coord_labels_) {
+        window.draw(label);
+    }
+
+    // Dynamic elements
+    draw_stones(window, board, last_move);
+    if (hint_pos.has_value()) {
+        draw_hint(window, *hint_pos, hover_color);
+    }
+    if (hover_pos.has_value()) {
+        draw_hover(window, *hover_pos, hover_color);
     }
 }
 
@@ -149,6 +165,15 @@ void BoardRenderer::draw_hover(sf::RenderWindow& window, Pos pos, Stone color) c
     ghost.setOrigin(STONE_RADIUS, STONE_RADIUS);
     ghost.setPosition(px);
     ghost.setFillColor(color == Stone::Black ? HOVER_BLACK : HOVER_WHITE);
+    window.draw(ghost);
+}
+
+void BoardRenderer::draw_hint(sf::RenderWindow& window, Pos pos, Stone color) const {
+    sf::Vector2f px = pos_to_pixel(pos.row, pos.col);
+    sf::CircleShape ghost(STONE_RADIUS);
+    ghost.setOrigin(STONE_RADIUS, STONE_RADIUS);
+    ghost.setPosition(px);
+    ghost.setFillColor(color == Stone::Black ? HINT_BLACK : HINT_WHITE);
     window.draw(ghost);
 }
 

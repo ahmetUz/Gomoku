@@ -92,6 +92,9 @@ public:
     void set_time_limit(uint64_t time_ms);
     int8_t max_depth() const { return max_depth_; }
 
+    // Signal AI to abort current search
+    void stop();
+
     // Cache management
     void clear_cache();
     TTStats tt_stats() const;

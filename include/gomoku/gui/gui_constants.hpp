@@ -33,6 +33,8 @@ inline const sf::Color WHITE_STONE_COLOR(240, 240, 240);
 inline const sf::Color WHITE_HIGHLIGHT(255, 255, 255);
 inline const sf::Color HOVER_BLACK(30, 30, 30, 100);
 inline const sf::Color HOVER_WHITE(240, 240, 240, 100);
+inline const sf::Color HINT_BLACK(50, 180, 50, 140);
+inline const sf::Color HINT_WHITE(50, 220, 50, 140);
 inline const sf::Color BTN_BG(80, 80, 90);
 inline const sf::Color BTN_HOVER(100, 100, 115);
 inline const sf::Color BTN_TEXT(230, 230, 230);

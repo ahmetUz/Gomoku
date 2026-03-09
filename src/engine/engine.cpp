@@ -609,6 +609,10 @@ bool AIEngine::is_illusory_break(const Board& board,
     return true; // All breaks are illusory → effectively unbreakable
 }
 
+void AIEngine::stop() {
+    searcher_.stop();
+}
+
 void AIEngine::set_max_depth(int8_t depth) {
     max_depth_ = depth;
 }

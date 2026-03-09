@@ -16,8 +16,13 @@ GameController::GameController(const sf::Font& font)
 }
 
 GameController::~GameController() {
+    engine_.stop();
     if (ai_thread_.joinable()) {
         ai_thread_.join();
+    }
+    hint_engine_.stop();
+    if (hint_thread_.joinable()) {
+        hint_thread_.join();
     }
 }
 
@@ -38,6 +43,9 @@ void GameController::run() {
 
             if (ai_done_.load()) {
                 check_ai_result();
+            }
+            if (hint_done_.load()) {
+                check_hint_result();
             }
 
             if (phase_ == GamePhase::Playing && !winner_.has_value() &&
@@ -62,6 +70,10 @@ void GameController::handle_events() {
         if (event.type == sf::Event::Closed) {
             window_.close();
         }
+        else if (event.type == sf::Event::Resized) {
+            // WSL2/X11 may allow resize despite style flags — snap back
+            window_.setSize(sf::Vector2u(WINDOW_WIDTH, WINDOW_HEIGHT));
+        }
         else if (event.type == sf::Event::KeyPressed) {
             handle_key(event.key.code);
         }
@@ -72,11 +84,11 @@ void GameController::handle_events() {
             }
         }
         else if (event.type == sf::Event::MouseMoved) {
+            mouse_pos_ = {static_cast<float>(event.mouseMove.x),
+                          static_cast<float>(event.mouseMove.y)};
             if (phase_ == GamePhase::Playing && !winner_.has_value() &&
                 !ai_thinking_.load()) {
-                auto [row, col] = pixel_to_pos(
-                    static_cast<float>(event.mouseMove.x),
-                    static_cast<float>(event.mouseMove.y));
+                auto [row, col] = pixel_to_pos(mouse_pos_.x, mouse_pos_.y);
                 if (row >= 0 && col >= 0) {
                     Pos pos(static_cast<uint8_t>(row), static_cast<uint8_t>(col));
                     hover_pos_ = board_.is_empty(pos)
@@ -103,16 +115,22 @@ void GameController::handle_click(float x, float y) {
         case GamePhase::Playing: {
             if (winner_.has_value()) {
                 if (ui_panel_.is_new_game_clicked(x, y))
-                    phase_ = GamePhase::Menu;
+                    go_to_menu();
                 break;
             }
 
+            if (ui_panel_.is_hint_clicked(x, y)) {
+                if (!is_ai_turn() && !hint_thinking_.load()) {
+                    start_hint();
+                }
+                break;
+            }
             if (ui_panel_.is_undo_clicked(x, y)) {
                 undo_move();
                 break;
             }
             if (ui_panel_.is_new_game_clicked(x, y)) {
-                phase_ = GamePhase::Menu;
+                go_to_menu();
                 break;
             }
 
@@ -127,7 +145,7 @@ void GameController::handle_click(float x, float y) {
         }
         case GamePhase::GameOver: {
             if (ui_panel_.is_new_game_clicked(x, y))
-                phase_ = GamePhase::Menu;
+                go_to_menu();
             break;
         }
     }
@@ -136,7 +154,7 @@ void GameController::handle_click(float x, float y) {
 void GameController::handle_key(sf::Keyboard::Key key) {
     if (key == sf::Keyboard::Escape) {
         if (phase_ != GamePhase::Menu) {
-            phase_ = GamePhase::Menu;
+            go_to_menu();
         } else {
             window_.close();
         }
@@ -145,8 +163,14 @@ void GameController::handle_key(sf::Keyboard::Key key) {
         if (phase_ == GamePhase::Playing)
             undo_move();
     }
+    else if (key == sf::Keyboard::H) {
+        if (phase_ == GamePhase::Playing && !winner_.has_value() &&
+            !is_ai_turn() && !hint_thinking_.load()) {
+            start_hint();
+        }
+    }
     else if (key == sf::Keyboard::N) {
-        phase_ = GamePhase::Menu;
+        go_to_menu();
     }
 }
 
@@ -158,6 +182,7 @@ bool GameController::execute_move(Pos pos) {
     if (!board_.is_empty(pos)) return false;
     if (!is_valid_move(board_, pos, color)) return false;
 
+    cancel_hint();
     board_.place_stone(pos, color);
     CaptureInfo cap_info = execute_captures_fast(board_, pos, color);
 
@@ -176,10 +201,13 @@ bool GameController::execute_move(Pos pos) {
 bool GameController::undo_move() {
     if (history_.empty()) return false;
 
+    cancel_hint();
+
     // Invalidate any in-flight AI result
     ++move_gen_;
 
-    // Wait for AI thread to finish before mutating board
+    // Signal AI to abort, then join (nearly instant)
+    engine_.stop();
     if (ai_thread_.joinable()) ai_thread_.join();
     ai_thinking_.store(false);
     ai_done_.store(false);
@@ -205,8 +233,10 @@ bool GameController::undo_move() {
 }
 
 void GameController::new_game(GameMode mode) {
+    cancel_hint();
     ++move_gen_;  // invalidate any in-flight AI result
 
+    engine_.stop();
     if (ai_thread_.joinable()) {
         ai_thread_.join();
     }
@@ -224,6 +254,16 @@ void GameController::new_game(GameMode mode) {
     engine_.clear_cache();
 }
 
+void GameController::go_to_menu() {
+    cancel_hint();
+    ++move_gen_;
+    engine_.stop();
+    if (ai_thread_.joinable()) ai_thread_.join();
+    ai_thinking_.store(false);
+    ai_done_.store(false);
+    phase_ = GamePhase::Menu;
+}
+
 bool GameController::is_ai_turn() const {
     if (winner_.has_value()) return false;
     switch (mode_) {
@@ -237,11 +277,13 @@ bool GameController::is_ai_turn() const {
 void GameController::start_ai_turn() {
     if (ai_thinking_.load()) return;
 
+    engine_.stop();
     if (ai_thread_.joinable()) ai_thread_.join();
 
     ai_thinking_.store(true);
     ai_done_.store(false);
     ai_started_gen_ = move_gen_;
+    ai_clock_.restart();
 
     Board board_copy = board_;
     Stone color = current_turn_;
@@ -282,6 +324,55 @@ void GameController::check_ai_result() {
     }
 }
 
+// ─── Hint ────────────────────────────────────────────────────────────────────
+
+void GameController::start_hint() {
+    if (hint_thinking_.load()) return;
+
+    // Stop any lingering previous hint before joining
+    hint_engine_.stop();
+    if (hint_thread_.joinable()) hint_thread_.join();
+
+    hint_pos_ = std::nullopt;
+    hint_thinking_.store(true);
+    hint_done_.store(false);
+
+    Board board_copy = board_;
+    Stone color = current_turn_;
+
+    hint_thread_ = std::thread([this, board_copy, color]() {
+        MoveResult result = hint_engine_.get_move_with_stats(board_copy, color);
+        std::lock_guard<std::mutex> lock(hint_mutex_);
+        hint_result_pos_ = result.best_move;
+        hint_done_.store(true);
+    });
+}
+
+void GameController::check_hint_result() {
+    Pos result;
+    {
+        std::lock_guard<std::mutex> lock(hint_mutex_);
+        result = hint_result_pos_;
+    }
+
+    if (hint_thread_.joinable()) hint_thread_.join();
+
+    hint_thinking_.store(false);
+    hint_done_.store(false);
+
+    if (!result.is_sentinel() && board_.is_empty(result)) {
+        hint_pos_ = result;
+    }
+}
+
+void GameController::cancel_hint() {
+    hint_engine_.stop();
+    if (hint_thread_.joinable()) hint_thread_.join();
+    hint_thinking_.store(false);
+    hint_done_.store(false);
+    hint_pos_ = std::nullopt;
+}
+
 // ─── Drawing ────────────────────────────────────────────────────────────────
 
 void GameController::draw() {
@@ -289,17 +380,22 @@ void GameController::draw() {
 
     switch (phase_) {
         case GamePhase::Menu:
-            ui_panel_.draw_menu(window_);
+            ui_panel_.draw_menu(window_, mouse_pos_);
             break;
 
         case GamePhase::Playing:
         case GamePhase::GameOver:
             board_renderer_.draw(window_, board_, last_move_, hover_pos_,
-                                 current_turn_);
+                                 current_turn_, hint_pos_);
+            bool thinking = ai_thinking_.load();
+            uint32_t elapsed = thinking
+                ? static_cast<uint32_t>(ai_clock_.getElapsedTime().asMilliseconds())
+                : 0;
             ui_panel_.draw_playing(window_, board_, current_turn_,
                                    static_cast<int>(history_.size() + 1),
                                    last_move_, last_ai_result_,
-                                   ai_thinking_.load(), mode_);
+                                   thinking, elapsed, mode_,
+                                   mouse_pos_);
             if (winner_.has_value()) {
                 ui_panel_.draw_game_over(window_, *winner_, board_);
             }

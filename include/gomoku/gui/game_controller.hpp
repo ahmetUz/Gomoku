@@ -55,9 +55,20 @@ private:
     MoveResult ai_result_;
     uint64_t move_gen_ = 0;        // incremented on every state change
     uint64_t ai_started_gen_ = 0;  // generation when AI was launched
+    sf::Clock ai_clock_;           // live timer for AI thinking duration
+
+    // Hint (H key — show AI suggestion)
+    std::optional<Pos> hint_pos_;
+    std::atomic<bool> hint_thinking_{false};
+    std::atomic<bool> hint_done_{false};
+    AIEngine hint_engine_;
+    std::thread hint_thread_;
+    std::mutex hint_mutex_;
+    Pos hint_result_pos_;
 
     // Hover
     std::optional<Pos> hover_pos_;
+    sf::Vector2f mouse_pos_;  // current mouse in logical coords
 
     // Event handling
     void handle_events();
@@ -68,9 +79,13 @@ private:
     bool execute_move(Pos pos);
     bool undo_move();
     void new_game(GameMode mode);
+    void go_to_menu();
     bool is_ai_turn() const;
     void start_ai_turn();
     void check_ai_result();
+    void start_hint();
+    void check_hint_result();
+    void cancel_hint();
 
     // Drawing
     void draw();
