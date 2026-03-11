@@ -60,9 +60,6 @@ struct Pos {
 
     // Row-major ordering, consistent with Rust Ord implementation
     constexpr bool operator<(const Pos& o) const { return to_index() < o.to_index(); }
-    constexpr bool operator<=(const Pos& o) const { return to_index() <= o.to_index(); }
-    constexpr bool operator>(const Pos& o) const { return to_index() > o.to_index(); }
-    constexpr bool operator>=(const Pos& o) const { return to_index() >= o.to_index(); }
 };
 
 } // namespace gomoku

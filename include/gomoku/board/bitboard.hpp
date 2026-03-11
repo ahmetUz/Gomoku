@@ -48,8 +48,6 @@ namespace gomoku {
         BitboardIterator begin() const;
         BitboardIterator end() const;
 
-        bool operator==(const Bitboard& o) const;
-        bool operator!=(const Bitboard& o) const { return !(*this == o); }
     };
 
     // Iterator over set bits in a Bitboard.

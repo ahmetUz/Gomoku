@@ -33,13 +33,6 @@ namespace gomoku {
         return BitboardIterator(); // sentinel: word_idx_ == 6
     }
 
-    bool Bitboard::operator==(const Bitboard& o) const {
-        for (int i = 0; i < 6; ++i) {
-            if (bits[i] != o.bits[i]) return false;
-        }
-        return true;
-    }
-
     // --- BitboardIterator ---
 
     BitboardIterator::BitboardIterator(const uint64_t* bits, int start_word)
