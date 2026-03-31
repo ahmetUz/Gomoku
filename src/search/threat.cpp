@@ -67,8 +67,19 @@ ThreatSearcher::ThreatSearcher()
 ThreatSearcher::ThreatSearcher(uint8_t vcf_depth, uint8_t vct_depth)
     : max_vcf_depth_(vcf_depth), max_vct_depth_(vct_depth), nodes_(0) {}
 
-ThreatResult ThreatSearcher::search_vcf(const Board& board, Stone color) {
+bool ThreatSearcher::is_timed_out() const {
+    if (search_time_limit_ms_ == 0) return false;
+    if ((nodes_ & 255) != 0) return false; // check every 256 nodes
+    auto elapsed = std::chrono::steady_clock::now() - search_start_;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()
+        >= static_cast<int64_t>(search_time_limit_ms_);
+}
+
+ThreatResult ThreatSearcher::search_vcf(const Board& board, Stone color,
+                                         uint64_t time_limit_ms) {
     nodes_ = 0;
+    search_start_ = std::chrono::steady_clock::now();
+    search_time_limit_ms_ = time_limit_ms;
     std::vector<Pos> sequence;
     Board work_board = board;
 
@@ -83,7 +94,7 @@ bool ThreatSearcher::vcf_search(Board& board, Stone color, uint8_t depth,
                                 std::vector<Pos>& sequence) {
     nodes_ += 1;
 
-    if (depth > max_vcf_depth_) {
+    if (depth > max_vcf_depth_ || is_timed_out()) {
         return false;
     }
 

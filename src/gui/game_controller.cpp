@@ -1,4 +1,6 @@
 #include "gomoku/gui/game_controller.hpp"
+#include <iostream>
+#include <thread>
 
 namespace gomoku {
 namespace gui {
@@ -27,38 +29,36 @@ GameController::~GameController() {
 }
 
 void GameController::run() {
+    window_.setVerticalSyncEnabled(false);
     sf::Clock frame_clock;
-    constexpr int TARGET_FPS = 60;
-    const sf::Time target_frame_time = sf::microseconds(1'000'000 / TARGET_FPS);
+    constexpr sf::Int32 FRAME_MS = 16; // ~60 FPS
 
     while (window_.isOpen()) {
-        // 1. Always drain the full event queue — this must never be
-        //    gated by a sleep or frame timer, otherwise the window
-        //    manager considers us unresponsive (freeze on drag, etc.).
+        // Always drain events to stay responsive.
         handle_events();
 
-        // 2. Game-logic tick + redraw only at ~60 fps.
-        if (frame_clock.getElapsedTime() >= target_frame_time) {
-            frame_clock.restart();
-
-            if (ai_done_.load()) {
-                check_ai_result();
-            }
-            if (hint_done_.load()) {
-                check_hint_result();
-            }
-
-            if (phase_ == GamePhase::Playing && !winner_.has_value() &&
-                is_ai_turn() && !ai_thinking_.load()) {
-                start_ai_turn();
-            }
-
-            draw();
-        } else {
-            // Yield the CPU briefly so we don't busy-wait, but keep
-            // the sleep short (1 ms) so events are still polled fast.
-            sf::sleep(sf::milliseconds(1));
+        // Only update logic + redraw at ~60 FPS.
+        // This prevents flooding the WSL2/X11 compositor with frames,
+        // which causes the display to stop refreshing visually.
+        if (frame_clock.getElapsedTime().asMilliseconds() < FRAME_MS) {
+            std::this_thread::yield();
+            continue;
         }
+        frame_clock.restart();
+
+        if (ai_done_.load()) {
+            check_ai_result();
+        }
+        if (hint_done_.load()) {
+            check_hint_result();
+        }
+
+        if (phase_ == GamePhase::Playing && !winner_.has_value() &&
+            is_ai_turn() && !ai_thinking_.load()) {
+            start_ai_turn();
+        }
+
+        draw();
     }
 }
 
@@ -403,6 +403,13 @@ void GameController::draw() {
     }
 
     window_.display();
+
+    // Detect display() stalls (WSL2/XWayland can block here)
+    static sf::Clock stall_clock;
+    auto frame_ms = stall_clock.restart().asMilliseconds();
+    if (frame_ms > 500) {
+        std::cerr << "[WARNING] Frame took " << frame_ms << "ms (display stall?)\n";
+    }
 }
 
 } // namespace gui

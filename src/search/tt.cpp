@@ -3,12 +3,9 @@
 // Quand le moteur evalue une position, il stocke le resultat dans une grande
 // table indexee par le hash de la position. Si la meme position se presente
 // plus tard (par une autre sequence de coups), on reutilise le resultat au
-// lieu de tout recalculer. C'est comme si le moteur se souvenait des
-// positions qu'il a deja vues.
+// lieu de tout recalculer.
 //
-// Deux implementations :
-// - TranspositionTable : version simple, mono-thread (pour les tests)
-// - AtomicTT : version lock-free pour la recherche parallele (Lazy SMP)
+// AtomicTT : version lock-free pour la recherche parallele (Lazy SMP)
 //   Utilise le "XOR trick" de Hyatt (1994) : on stocke key = hash XOR data.
 //   En lecture, si (key XOR data) != hash attendu, c'est une lecture
 //   corrompue (torn read) et on ignore l'entree. Pas besoin de mutex.
@@ -21,105 +18,6 @@
 #include <cstddef>
 
 namespace gomoku {
-
-// =========================================================================
-// Single-threaded TranspositionTable
-// =========================================================================
-
-TranspositionTable::TranspositionTable(size_t size_mb) {
-    size_t entry_size = sizeof(std::optional<TTEntry>);
-    size_t size = (size_mb * 1024 * 1024) / entry_size;
-
-    // Ensure at least some entries
-    size = std::max(size, size_t(1024));
-
-    entries_.resize(size);
-    size_ = size;
-}
-
-std::optional<std::pair<int32_t, std::optional<Pos>>>
-TranspositionTable::probe(uint64_t hash, int8_t depth, int32_t alpha, int32_t beta) const {
-    size_t idx = static_cast<size_t>(hash) % size_;
-
-    if (!entries_[idx].has_value()) {
-        return std::nullopt;
-    }
-
-    const TTEntry& entry = entries_[idx].value();
-
-    if (entry.hash != hash) {
-        return std::nullopt;
-    }
-
-    // Can use score if stored search was at least as deep
-    if (entry.depth >= depth) {
-        switch (entry.entry_type) {
-            case EntryType::Exact:
-                return std::make_pair(entry.score, entry.best_move);
-            case EntryType::LowerBound:
-                if (entry.score >= beta) {
-                    return std::make_pair(entry.score, entry.best_move);
-                }
-                break;
-            case EntryType::UpperBound:
-                if (entry.score <= alpha) {
-                    return std::make_pair(entry.score, entry.best_move);
-                }
-                break;
-        }
-    }
-
-    // Return best move for move ordering even if score not usable
-    return std::make_pair(0, entry.best_move);
-}
-
-std::optional<Pos> TranspositionTable::get_best_move(uint64_t hash) const {
-    size_t idx = static_cast<size_t>(hash) % size_;
-
-    if (!entries_[idx].has_value()) {
-        return std::nullopt;
-    }
-
-    const TTEntry& entry = entries_[idx].value();
-    if (entry.hash == hash) {
-        return entry.best_move;
-    }
-    return std::nullopt;
-}
-
-void TranspositionTable::store(uint64_t hash, int8_t depth, int32_t score,
-                               EntryType entry_type, std::optional<Pos> best_move) {
-    size_t idx = static_cast<size_t>(hash) % size_;
-
-    // Replace if: empty, same position, or new search is deeper
-    bool should_replace = false;
-    if (!entries_[idx].has_value()) {
-        should_replace = true;
-    } else {
-        const TTEntry& e = entries_[idx].value();
-        should_replace = (e.hash == hash || e.depth <= depth);
-    }
-
-    if (should_replace) {
-        entries_[idx] = TTEntry{hash, depth, score, entry_type, best_move};
-    }
-}
-
-void TranspositionTable::clear() {
-    std::fill(entries_.begin(), entries_.end(), std::nullopt);
-}
-
-TTStats TranspositionTable::stats() const {
-    size_t used = std::count_if(entries_.begin(), entries_.end(),
-                                 [](const std::optional<TTEntry>& e) {
-                                     return e.has_value();
-                                 });
-    return TTStats{
-        size_,
-        used,
-        static_cast<uint8_t>(static_cast<double>(used) / size_ * 100.0)
-    };
-}
 
 // =========================================================================
 // Lock-free AtomicTT for Lazy SMP parallel search

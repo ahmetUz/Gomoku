@@ -12,6 +12,7 @@
 
 #include "gomoku/board/board.hpp"
 #include <vector>
+#include <chrono>
 #include <cstdint>
 
 namespace gomoku {
@@ -36,8 +37,10 @@ public:
     // Custom depth limits
     ThreatSearcher(uint8_t vcf_depth, uint8_t vct_depth);
 
-    // Search for VCF (Victory by Continuous Fours)
-    ThreatResult search_vcf(const Board& board, Stone color);
+    // Search for VCF (Victory by Continuous Fours).
+    // time_limit_ms: abort if exceeded (0 = no limit).
+    ThreatResult search_vcf(const Board& board, Stone color,
+                            uint64_t time_limit_ms = 0);
 
     // Search for VCT (Victory by Continuous Threats)
     // Tries VCF first, then falls back to VCT with open-three threats.
@@ -61,6 +64,10 @@ private:
     uint8_t max_vcf_depth_;
     uint8_t max_vct_depth_;
     uint64_t nodes_;
+    std::chrono::steady_clock::time_point search_start_;
+    uint64_t search_time_limit_ms_ = 0;
+
+    bool is_timed_out() const;
 
     bool vcf_search(Board& board, Stone color, uint8_t depth,
                     std::vector<Pos>& sequence);

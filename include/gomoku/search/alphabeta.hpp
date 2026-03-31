@@ -61,9 +61,6 @@ public:
     // Create with explicit thread count.
     Searcher(size_t tt_size_mb, size_t num_threads);
 
-    // Single-threaded search (deterministic, for tests).
-    SearchResult search(const Board& board, Stone color, int8_t max_depth);
-
     // Timed search with Lazy SMP parallel search.
     // Minimum depth 6, soft time limit with prediction-based cutoff.
     SearchResult search_timed(const Board& board, Stone color,

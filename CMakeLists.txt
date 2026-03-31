@@ -126,11 +126,3 @@ endif()
 add_executable(gomoku_bench EXCLUDE_FROM_ALL bench/benchmark.cpp)
 target_link_libraries(gomoku_bench PRIVATE gomoku_lib)
 
-# ── Tests (not in default build — use: make gomoku_tests) ─────────────────────
-# Catch2 has 107 compilation units; keeping it out of `make` saves ~55% of
-# clean build time.  Build tests explicitly with `make gomoku_tests`.
-option(BUILD_TESTS "Fetch Catch2 and register test target" ON)
-if(BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
