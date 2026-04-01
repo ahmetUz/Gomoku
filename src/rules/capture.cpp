@@ -53,20 +53,6 @@ std::vector<Pos> get_captured_positions(const Board& board, Pos pos, Stone stone
     return captured;
 }
 
-std::vector<Pos> execute_captures(Board& board, Pos pos, Stone stone) {
-    auto captured = get_captured_positions(board, pos, stone);
-
-    for (const auto& cap_pos : captured) {
-        board.remove_stone(cap_pos);
-    }
-
-    // Add capture count (pairs, not individual stones)
-    uint8_t pairs = uint8_t(captured.size() / 2);
-    board.add_captures(stone, pairs);
-
-    return captured;
-}
-
 bool has_capture(const Board& board, Pos pos, Stone stone) {
     Stone opp = opponent(stone);
 
@@ -92,10 +78,6 @@ bool has_capture(const Board& board, Pos pos, Stone stone) {
         }
     }
     return false;
-}
-
-uint8_t count_captures(const Board& board, Pos pos, Stone stone) {
-    return count_captures_fast(board, pos, stone);
 }
 
 uint8_t count_captures_fast(const Board& board, Pos pos, Stone stone) {
@@ -127,6 +109,7 @@ uint8_t count_captures_fast(const Board& board, Pos pos, Stone stone) {
 }
 
 CaptureInfo execute_captures_fast(Board& board, Pos pos, Stone stone) {
+    // 
     Stone opp = opponent(stone);
     CaptureInfo info{};
 

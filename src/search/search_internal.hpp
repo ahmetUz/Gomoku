@@ -3,7 +3,7 @@
 // Internal header -- per-thread search state for alpha-beta.
 // NOT part of the public API. Only included by src/search/*.cpp files.
 
-#include "gomoku/search/alphabeta.hpp"
+#include "gomoku/search/searcher.hpp"
 #include "gomoku/search/zobrist.hpp"
 #include "gomoku/search/tt.hpp"
 #include "gomoku/eval/heuristic.hpp"
@@ -162,6 +162,17 @@ struct WorkerSearcher {
     SearchResult search_iterative(
         const Board& board, Stone color,
         int8_t max_depth_arg, int8_t start_depth_offset);
+
+    // Aspiration window search around prev_score.
+    SearchResult search_with_aspiration(
+        Board& board, Stone color, int8_t depth, int32_t prev_score);
+
+    // Time management: should we start the next depth?
+    bool should_stop_deepening(
+        std::chrono::steady_clock::time_point search_start,
+        std::chrono::milliseconds soft_limit,
+        std::chrono::steady_clock::duration depth_time,
+        std::chrono::steady_clock::duration prev_depth_time) const;
 
     // Root-level PVS search.
     SearchResult search_root(

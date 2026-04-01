@@ -38,6 +38,7 @@ inline const sf::Color HINT_WHITE(50, 220, 50, 140);
 inline const sf::Color BTN_BG(80, 80, 90);
 inline const sf::Color BTN_HOVER(100, 100, 115);
 inline const sf::Color BTN_TEXT(230, 230, 230);
+inline const sf::Color FORBIDDEN_COLOR(220, 40, 40, 120);
 
 // Hoshi (star) points
 constexpr std::array<std::pair<int,int>, 9> HOSHI_POINTS = {{

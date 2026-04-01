@@ -2,6 +2,7 @@
 
 #include <SFML/Graphics.hpp>
 #include "gomoku/board/board.hpp"
+#include "gomoku/rules/forbidden.hpp"
 #include "gui_constants.hpp"
 #include <optional>
 #include <vector>
@@ -29,6 +30,8 @@ private:
                      std::optional<Pos> last_move) const;
     void draw_hover(sf::RenderWindow& window, Pos pos, Stone color) const;
     void draw_hint(sf::RenderWindow& window, Pos pos, Stone color) const;
+    void draw_forbidden(sf::RenderWindow& window, const Board& board,
+                        Stone color) const;
 };
 
 } // namespace gui

@@ -104,6 +104,7 @@ void BoardRenderer::draw(sf::RenderWindow& window, const Board& board,
 
     // Dynamic elements
     draw_stones(window, board, last_move);
+    draw_forbidden(window, board, hover_color);
     if (hint_pos.has_value()) {
         draw_hint(window, *hint_pos, hover_color);
     }
@@ -175,6 +176,46 @@ void BoardRenderer::draw_hint(sf::RenderWindow& window, Pos pos, Stone color) co
     ghost.setPosition(px);
     ghost.setFillColor(color == Stone::Black ? HINT_BLACK : HINT_WHITE);
     window.draw(ghost);
+}
+
+void BoardRenderer::draw_forbidden(sf::RenderWindow& window, const Board& board,
+                                    Stone color) const {
+    for (int r = 0; r < 19; ++r) {
+        for (int c = 0; c < 19; ++c) {
+            Pos pos(static_cast<uint8_t>(r), static_cast<uint8_t>(c));
+            if (!board.is_empty(pos)) continue;
+            if (!is_double_three(board, pos, color)) continue;
+
+            sf::Vector2f px = pos_to_pixel(r, c);
+            float half = STONE_RADIUS * 0.75f;
+            constexpr float THICK = 4.0f;
+            constexpr float CAP_R = THICK * 0.5f;
+
+            auto draw_bar = [&](float x1, float y1, float x2, float y2) {
+                float dx = x2 - x1, dy = y2 - y1;
+                float len = std::sqrt(dx * dx + dy * dy);
+                float nx = -dy / len * THICK * 0.5f;
+                float ny =  dx / len * THICK * 0.5f;
+                sf::ConvexShape bar(4);
+                bar.setPoint(0, {x1 + nx, y1 + ny});
+                bar.setPoint(1, {x2 + nx, y2 + ny});
+                bar.setPoint(2, {x2 - nx, y2 - ny});
+                bar.setPoint(3, {x1 - nx, y1 - ny});
+                bar.setFillColor(FORBIDDEN_COLOR);
+                window.draw(bar);
+                // Round caps
+                sf::CircleShape cap(CAP_R);
+                cap.setOrigin(CAP_R, CAP_R);
+                cap.setFillColor(FORBIDDEN_COLOR);
+                cap.setPosition(x1, y1);
+                window.draw(cap);
+                cap.setPosition(x2, y2);
+                window.draw(cap);
+            };
+            draw_bar(px.x - half, px.y - half, px.x + half, px.y + half);
+            draw_bar(px.x + half, px.y - half, px.x - half, px.y + half);
+        }
+    }
 }
 
 } // namespace gui

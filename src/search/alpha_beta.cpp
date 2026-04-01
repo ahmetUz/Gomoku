@@ -1,25 +1,29 @@
-// Coeur de la recherche : alpha-beta recursif, quiescence, five-break
+// Recherche recursive : negamax alpha-beta, quiescence, five-break
 //
-// alpha_beta() : negamax avec elagage alpha-beta et optimisations :
-//   NMP (Null Move Pruning), LMR (Late Move Reductions), PVS (Principal
-//   Variation Search), futility pruning, razoring, IID.
+// alpha_beta()        : negamax avec elagage et optimisations
+//   - NMP  (Null Move Pruning)   : simuler "passer son tour"
+//   - RFP  (Reverse Futility)    : couper si eval >> beta
+//   - Razoring                   : tomber en quiescence si eval << alpha
+//   - IID  (Internal Iterative)  : mini-recherche pour trouver un TT move
+//   - LMR  (Late Move Reductions): profondeur reduite pour coups tardifs
+//   - PVS  (Principal Variation)  : fenetre nulle pour coups non-PV
+//   - Futility pruning           : ignorer coups calmes quand eval + marge <= alpha
+//   - LMP  (Late Move Pruning)   : ignorer coups tardifs a faible profondeur
 //
-// quiescence() : a la fin de l'arbre, on continue a explorer les coups
-//   forcants (cinq, quatre, captures gagnantes) pour eviter l'effet
-//   d'horizon. C'est comme verifier qu'aucune suite forcee ne change
-//   radicalement l'evaluation.
+// quiescence()        : ne chercher que cinq, quatre, capture-wins
+// search_five_break() : capturer pour casser un cinq adverse (regle Ninuki)
 //
-// search_five_break() : en Ninuki-renju, un cinq n'est pas forcement
-//   gagnant si l'adversaire peut capturer une paire du cinq. On explore
-//   uniquement les coups de capture qui brisent le cinq.
+// Appelees depuis search_root() dans searcher.cpp.
 
-#include "worker_searcher.hpp"
+#include "search_internal.hpp"
 
 namespace gomoku {
 
 // =========================================================================
-// quiescence
+//  quiescence -- coups forcants uniquement
 // =========================================================================
+// A la fin de l'arbre, on continue d'explorer les cinq, quatre et
+// capture-wins pour eviter l'effet d'horizon.
 
 int32_t WorkerSearcher::quiescence(
     Board& board, Stone color, int32_t alpha, int32_t beta,
@@ -30,7 +34,7 @@ int32_t WorkerSearcher::quiescence(
     if ((nodes & 4095) == 0 && check_time()) return 0;
     if (is_stopped()) return 0;
 
-    // Terminal: opponent just won
+    // Terminal : l'adversaire vient de gagner
     Stone last_player = opponent(color);
     if (board.captures(last_player) >= 5) return -PatternScore::FIVE;
     if (has_five_at_pos(board, last_move, last_player)) {
@@ -49,7 +53,7 @@ int32_t WorkerSearcher::quiescence(
         return probe->first;
     }
 
-    // Stand-pat: static evaluation as lower bound
+    // Stand-pat : evaluation statique comme borne basse
     int32_t stand_pat = evaluate(board, color);
     if (stand_pat >= beta) return stand_pat;
 
@@ -58,18 +62,17 @@ int32_t WorkerSearcher::quiescence(
 
     if (qs_depth >= MAX_QS_DEPTH) return stand_pat;
 
-    // After depth 6 in QS, only search fives (no more fours)
+    // Apres depth 6 en QS, ne chercher que les cinq (plus de fours)
     bool fours_allowed = qs_depth < 6;
 
     Stone opp = opponent(color);
     constexpr int8_t sz = static_cast<int8_t>(BOARD_SIZE);
     constexpr int8_t dirs[4][2] = {{1,0},{0,1},{1,1},{1,-1}};
 
-    // Generate forcing moves: fives, fours, capture-wins.
+    // Generation des coups forcants
     MoveList forcing_moves;
     bool seen[BOARD_SIZE][BOARD_SIZE] = {};
 
-    // Scan neighbors of all stones (both colors) in a single deduplicated loop.
     const Bitboard* bitboards[2] = {&board.black, &board.white};
     for (const auto* bb : bitboards) {
         for (Pos stone_pos : *bb) {
@@ -90,7 +93,7 @@ int32_t WorkerSearcher::quiescence(
                     int32_t priority = 0;
                     for (auto& dd : dirs) {
                         int8_t ddr = dd[0], ddc = dd[1];
-                        // Our line
+                        // Notre ligne
                         int32_t mc = 1;
                         int8_t rr = static_cast<int8_t>(pos.row) + ddr;
                         int8_t cc = static_cast<int8_t>(pos.col) + ddc;
@@ -114,7 +117,7 @@ int32_t WorkerSearcher::quiescence(
                             priority = std::max(priority, (mo_p == 2) ? 800 : 700);
                         }
 
-                        // Opponent line
+                        // Ligne adverse
                         int32_t oc = 1;
                         rr = static_cast<int8_t>(pos.row) + ddr;
                         cc = static_cast<int8_t>(pos.col) + ddc;
@@ -131,7 +134,7 @@ int32_t WorkerSearcher::quiescence(
                         if (oc >= 5) { priority = std::max(priority, 850); }
                     }
 
-                    // Capture-win check
+                    // Victoire par capture
                     if (priority == 0) {
                         uint8_t cap_count = count_captures_fast(board, pos, color);
                         if (cap_count > 0 && board.captures(color) + cap_count >= 5) {
@@ -151,7 +154,6 @@ int32_t WorkerSearcher::quiescence(
 
     forcing_moves.sort_descending();
 
-    // Move count pruning: limit forcing moves per QS node.
     size_t max_qs_moves = (qs_depth <= 2) ? 8 : 4;
 
     int32_t best_score = stand_pat;
@@ -159,7 +161,6 @@ int32_t WorkerSearcher::quiescence(
     size_t moves_searched = 0;
 
     for (auto& [mov, priority] : forcing_moves) {
-        // Always search fives (priority >= 850), limit fours
         if (priority < 850) {
             if (moves_searched >= max_qs_moves) break;
         }
@@ -185,7 +186,7 @@ int32_t WorkerSearcher::quiescence(
         if (score >= beta) break;
     }
 
-    // TT store at depth 0
+    // TT store
     if (!is_stopped()) {
         EntryType entry_type;
         if (best_score >= beta) {
@@ -203,7 +204,7 @@ int32_t WorkerSearcher::quiescence(
 }
 
 // =========================================================================
-// search_five_break
+//  search_five_break -- capturer pour casser un cinq adverse
 // =========================================================================
 // En Ninuki-renju, un cinq n'est pas forcement gagnant : si l'adversaire
 // peut capturer une paire qui fait partie du cinq, celui-ci est "cassable".
@@ -247,9 +248,8 @@ int32_t WorkerSearcher::search_five_break(
 }
 
 // =========================================================================
-// alpha_beta -- negamax avec elagage et optimisations
+//  alpha_beta -- negamax avec elagage et optimisations
 // =========================================================================
-// Chaque joueur cherche a maximiser SON score (negamax : on inverse le signe).
 // Alpha = meilleur score garanti pour nous, beta = meilleur pour l'adversaire.
 // Si on trouve un score >= beta, on coupe (l'adversaire ne le permettrait pas).
 
@@ -260,13 +260,12 @@ int32_t WorkerSearcher::alpha_beta(
 
     ++nodes;
 
-    // Time check every 512 nodes (~1.5ms at 300k NPS)
     if ((nodes & 511) == 0) {
         if (check_time()) return 0;
     }
     if (is_stopped()) return 0;
 
-    // --- Terminal checks ---
+    // --- Verifications terminales ---
     Stone last_player = opponent(color);
     if (board.captures(last_player) >= 5) return -PatternScore::FIVE;
     if (has_five_at_pos(board, last_move, last_player)) {
@@ -284,13 +283,9 @@ int32_t WorkerSearcher::alpha_beta(
         return PatternScore::FIVE;
     }
 
-    // --- Leaf: quiescence search ---
+    // --- Feuille : quiescence ---
     if (depth <= 0) {
-#ifndef GOMOKU_NO_QS
         return quiescence(board, color, alpha, beta, last_move, 0, hash);
-#else
-        return evaluate(board, color);
-#endif
     }
 
     // --- TT probe ---
@@ -300,34 +295,24 @@ int32_t WorkerSearcher::alpha_beta(
         return probe->first;
     }
 
-    // Pre-compute static eval for pruning decisions.
     bool non_terminal = std::abs(alpha) < PatternScore::FIVE - 100
         && std::abs(beta) < PatternScore::FIVE - 100;
     int32_t static_eval = non_terminal ? evaluate(board, color) : 0;
 
     // --- Reverse Futility Pruning (RFP) ---
-    // Si l'eval statique est tres au-dessus de beta, on coupe directement.
-#ifndef GOMOKU_NO_RFP
     if (depth <= 3 && non_terminal
         && static_eval - PatternScore::OPEN_THREE * static_cast<int32_t>(depth) >= beta) {
         return static_eval;
     }
-#endif
 
     // --- Razoring ---
-    // Si l'eval est tres en dessous d'alpha, on tombe en quiescence.
-#ifndef GOMOKU_NO_RAZORING
     if (depth <= 3 && non_terminal
         && static_eval + PatternScore::OPEN_THREE * static_cast<int32_t>(depth) <= alpha) {
         int32_t qs_score = quiescence(board, color, alpha, beta, last_move, 0, hash);
         if (qs_score <= alpha) return qs_score;
     }
-#endif
 
     // --- Null Move Pruning (NMP) ---
-    // On simule "passer son tour". Si on est encore au-dessus de beta, on coupe.
-    // Interdit quand on est menace (passer serait catastrophique).
-#ifndef GOMOKU_NO_NMP
     if (allow_null && depth >= 3 && non_terminal
         && static_eval >= beta
         && !is_threatened(board, color, last_move)) {
@@ -346,14 +331,12 @@ int32_t WorkerSearcher::alpha_beta(
             if (!is_stopped() && verify >= beta) return beta;
         }
     }
-#endif
 
-    // --- Move generation ---
+    // --- Generation des coups ---
     Pos tt_move = shared->tt.get_best_move(hash).value_or(Pos::sentinel());
     if (!tt_move.is_sentinel()) stats.tt_move_hits += 1;
 
-    // IID: mini-recherche si pas de TT move, pour en trouver un.
-#ifndef GOMOKU_NO_IID
+    // IID : mini-recherche si pas de TT move.
     if (tt_move.is_sentinel() && depth >= 6) {
         int8_t iid_depth = std::max(int8_t(depth - 4), int8_t(1));
         alpha_beta(board, color, iid_depth, alpha, beta, last_move, hash, false);
@@ -361,13 +344,12 @@ int32_t WorkerSearcher::alpha_beta(
             tt_move = shared->tt.get_best_move(hash).value_or(Pos::sentinel());
         }
     }
-#endif
 
     last_move_for_ordering = last_move;
     MoveList moves = generate_moves_ordered(board, color, tt_move, depth, MAX_INTERNAL_MOVES);
     if (moves.empty()) return evaluate(board, color);
 
-    // Adaptive move count: fewer moves in quiet positions.
+    // Nombre de coups adaptatif.
     bool is_tactical = moves.top_score >= 850000;
     size_t max_moves;
     if (is_tactical) {
@@ -386,7 +368,6 @@ int32_t WorkerSearcher::alpha_beta(
         }
     }
 
-    // Filter forbidden moves, keeping at most max_moves valid ones.
     {
         size_t valid_count = 0;
         moves.remove_if([&](const std::pair<Pos, int32_t>& entry) {
@@ -399,8 +380,7 @@ int32_t WorkerSearcher::alpha_beta(
         });
     }
 
-    // --- Futility pruning margins ---
-#ifndef GOMOKU_NO_FUTILITY
+    // --- Futility pruning ---
     bool futility_ok = depth <= 4 && non_terminal;
     int32_t futility_margin;
     switch (depth) {
@@ -409,9 +389,8 @@ int32_t WorkerSearcher::alpha_beta(
         case 3: futility_margin = PatternScore::OPEN_FOUR + PatternScore::OPEN_THREE; break;
         default: futility_margin = PatternScore::OPEN_FOUR * 2; break;
     }
-#endif
 
-    // --- Main search loop ---
+    // --- Boucle principale ---
     int32_t best_score = -INF;
     Pos best_move = Pos::sentinel();
     EntryType entry_type = EntryType::UpperBound;
@@ -420,21 +399,17 @@ int32_t WorkerSearcher::alpha_beta(
         Pos mov = moves[i].first;
         int32_t move_score = moves[i].second;
 
-        // Futility pruning: skip quiet moves when eval + margin <= alpha.
-#ifndef GOMOKU_NO_FUTILITY
+        // Futility pruning
         if (futility_ok && i > 0 && static_eval + futility_margin <= alpha) {
             if (move_score < 800000) continue;
         }
-#endif
 
-        // Late Move Pruning (LMP): skip late quiet moves at low depth.
-#ifndef GOMOKU_NO_LMP
+        // Late Move Pruning (LMP)
         if (i > 0 && depth <= 3
             && i >= (3 + static_cast<size_t>(depth) * 2)
             && move_score < 800000) {
             continue;
         }
-#endif
 
         board.place_stone(mov, color);
         CaptureInfo cap_info = execute_captures_fast(board, mov, color);
@@ -442,24 +417,18 @@ int32_t WorkerSearcher::alpha_beta(
 
         bool is_capture = cap_info.pairs > 0;
 
-        // Threat extension: forcing moves get +1 ply.
-#ifndef GOMOKU_NO_THREAT_EXT
+        // Threat extension
         int8_t extension = (depth >= 2 && move_creates_four(board, mov, color))
             ? int8_t(1) : int8_t(0);
-#else
-        int8_t extension = 0;
-#endif
 
         // --- PVS + LMR ---
-        // PVS: 1er coup en fenetre complete, suivants en fenetre nulle.
-        // LMR: coups tardifs a profondeur reduite (reduction logarithmique).
         int32_t score;
         if (i == 0) {
             score = -alpha_beta(
                 board, opponent(color), depth - 1 + extension,
                 -beta, -alpha, mov, child_hash, true);
         } else {
-#ifndef GOMOKU_NO_LMR
+            // LMR : reduction logarithmique pour les coups tardifs.
             int8_t reduction;
             if (is_capture || extension > 0 || depth < 2 || i < 1) {
                 reduction = 0;
@@ -471,34 +440,26 @@ int32_t WorkerSearcher::alpha_beta(
                 else if (move_score < 800000) r_val += 1;
                 reduction = std::clamp(r_val, int8_t(1), int8_t(depth - 2));
             }
-#else
-            int8_t reduction = 0;
-#endif
             int8_t search_depth = std::max(int8_t(depth - 1 + extension - reduction), int8_t(0));
 
-#ifndef GOMOKU_NO_PVS
+            // PVS : fenetre nulle d'abord.
             score = -alpha_beta(
                 board, opponent(color), search_depth,
                 -(alpha + 1), -alpha, mov, child_hash, true);
 
-#ifndef GOMOKU_NO_LMR
+            // Re-search pleine profondeur si LMR a reduit et score > alpha.
             if (!is_stopped() && reduction > 0 && score > alpha) {
                 score = -alpha_beta(
                     board, opponent(color), depth - 1 + extension,
                     -(alpha + 1), -alpha, mov, child_hash, true);
             }
-#endif
 
+            // Re-search fenetre complete si score entre alpha et beta.
             if (!is_stopped() && score > alpha && score < beta) {
                 score = -alpha_beta(
                     board, opponent(color), depth - 1 + extension,
                     -beta, -alpha, mov, child_hash, true);
             }
-#else
-            score = -alpha_beta(
-                board, opponent(color), search_depth,
-                -beta, -alpha, mov, child_hash, true);
-#endif
         }
 
         undo_captures(board, color, cap_info);
@@ -512,7 +473,7 @@ int32_t WorkerSearcher::alpha_beta(
         }
 
         if (score >= beta) {
-            // Beta cutoff: update killer moves, history, countermove.
+            // Beta cutoff : mise a jour killer, history, countermove.
             stats.beta_cutoffs += 1;
             if (i == 0) stats.first_move_cutoffs += 1;
 

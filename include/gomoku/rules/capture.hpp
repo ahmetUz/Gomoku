@@ -27,17 +27,10 @@ namespace gomoku {
     // Returns pairs of captured opponent stones (always even count).
     std::vector<Pos> get_captured_positions(const Board& board, Pos pos, Stone stone);
 
-    // Execute captures: find, remove stones, update capture count.
-    // Returns the positions that were captured.
-    std::vector<Pos> execute_captures(Board& board, Pos pos, Stone stone);
-
     // Check if placing stone at pos would result in any captures (no allocation).
     bool has_capture(const Board& board, Pos pos, Stone stone);
 
     // Count how many pairs would be captured by a move (no allocation).
-    uint8_t count_captures(const Board& board, Pos pos, Stone stone);
-
-    // Identical to count_captures (no allocation path).
     uint8_t count_captures_fast(const Board& board, Pos pos, Stone stone);
 
     // Execute captures without heap allocation (for make/unmake pattern).

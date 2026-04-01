@@ -10,7 +10,7 @@
 // natively by the alpha-beta search via move ordering and quiescence.
 
 #include "gomoku/board/board.hpp"
-#include "gomoku/search/alphabeta.hpp"
+#include "gomoku/search/searcher.hpp"
 #include "gomoku/search/threat.hpp"
 #include <cstdint>
 #include <optional>
@@ -48,13 +48,8 @@ struct MoveResult {
     static uint64_t compute_nps(uint64_t nodes, uint64_t time_ms);
 
     // Factory methods
-    static MoveResult immediate_win(Pos pos, uint64_t time_ms);
     static MoveResult vcf_win(Pos pos, uint64_t time_ms, uint64_t nodes);
-    static MoveResult vct_win(Pos pos, uint64_t time_ms, uint64_t nodes);
-    static MoveResult defense(Pos pos, int32_t score, uint64_t time_ms, uint64_t nodes);
     static MoveResult from_alphabeta(const SearchResult& result, uint64_t time_ms, uint8_t tt_usage);
-    static MoveResult alpha_beta(Pos pos, int32_t score, uint64_t time_ms, uint64_t nodes);
-    static MoveResult no_move(uint64_t time_ms);
 };
 
 // Main AI Engine for Gomoku.
@@ -66,16 +61,8 @@ public:
     AIEngine();
     AIEngine(size_t tt_size_mb, int8_t max_depth, uint64_t time_limit_ms);
 
-    // Get the best move (convenience, returns only the move).
-    std::optional<Pos> get_move(const Board& board, Stone color);
-
     // Get the best move with detailed search statistics.
     MoveResult get_move_with_stats(const Board& board, Stone color);
-
-    // Configuration
-    void set_max_depth(int8_t depth);
-    void set_time_limit(uint64_t time_ms);
-    int8_t max_depth() const { return max_depth_; }
 
     void stop();
     void clear_cache();

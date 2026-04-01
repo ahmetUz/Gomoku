@@ -7,8 +7,9 @@
 // - VCT (Victory by Continuous Threats): More general, includes open-three
 //   threats. Tries VCF first, then falls back to VCT.
 //
-// These are powerful pruning techniques that find forced wins much faster
-// than regular alpha-beta by only considering forcing moves.
+// Implementation split:
+// - threat_vcf.cpp : VCF search (used in the engine pipeline)
+// - threat_vct.cpp : VCT search (standalone, not called by the engine)
 
 #include "gomoku/board/board.hpp"
 #include <vector>
@@ -47,20 +48,10 @@ public:
     ThreatResult search_vct(const Board& board, Stone color);
 
     uint64_t nodes() const { return nodes_; }
-    void reset_nodes() { nodes_ = 0; }
-
-    // Public for testing (mirrors Rust test access patterns)
-    bool creates_five_or_more(const Board& board, Pos pos, Stone color) const;
-    bool creates_four(const Board& board, Pos pos, Stone color) const;
-    bool creates_open_three(const Board& board, Pos pos, Stone color) const;
-    std::vector<Pos> find_four_threats(const Board& board, Stone color) const;
-    std::vector<Pos> find_defense_moves(
-        const Board& board, Pos threat_move, Stone attacker) const;
-
-    uint8_t max_vcf_depth() const { return max_vcf_depth_; }
-    uint8_t max_vct_depth() const { return max_vct_depth_; }
 
 private:
+    friend struct VCTAccess; // threat_vct.cpp access
+
     uint8_t max_vcf_depth_;
     uint8_t max_vct_depth_;
     uint64_t nodes_;
@@ -69,8 +60,19 @@ private:
 
     bool is_timed_out() const;
 
+    // Shared helpers (used by both VCF and VCT)
+    bool creates_five_or_more(const Board& board, Pos pos, Stone color) const;
+    bool creates_four(const Board& board, Pos pos, Stone color) const;
+    std::vector<Pos> find_four_threats(const Board& board, Stone color) const;
+    std::vector<Pos> find_defense_moves(
+        const Board& board, Pos threat_move, Stone attacker) const;
+
+    // VCF (threat_vcf.cpp)
     bool vcf_search(Board& board, Stone color, uint8_t depth,
                     std::vector<Pos>& sequence);
+
+    // VCT-only helpers (threat_vct.cpp)
+    bool creates_open_three(const Board& board, Pos pos, Stone color) const;
     bool vct_search(Board& board, Stone color, uint8_t depth,
                     std::vector<Pos>& sequence);
     std::vector<Pos> find_all_threats(const Board& board, Stone color) const;

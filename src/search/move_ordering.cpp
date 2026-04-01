@@ -11,7 +11,7 @@
 // - move_creates_four : detection de creation de quatre (threat extension)
 // - is_threatened : detection de menace (pour le Null Move Pruning)
 
-#include "worker_searcher.hpp"
+#include "search_internal.hpp"
 
 namespace gomoku {
 

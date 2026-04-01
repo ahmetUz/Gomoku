@@ -58,16 +58,6 @@ uint64_t MoveResult::compute_nps(uint64_t nodes, uint64_t time_ms) {
     return nodes * 1000 / time_ms / 1000;
 }
 
-MoveResult MoveResult::immediate_win(Pos pos, uint64_t time_ms) {
-    MoveResult result;
-    result.best_move = pos;
-    result.score = 1'000'000;
-    result.search_type = SearchType::ImmediateWin;
-    result.time_ms = time_ms;
-    result.nodes = 1;
-    return result;
-}
-
 MoveResult MoveResult::vcf_win(Pos pos, uint64_t time_ms, uint64_t nodes) {
     MoveResult result;
     result.best_move = pos;
@@ -76,33 +66,6 @@ MoveResult MoveResult::vcf_win(Pos pos, uint64_t time_ms, uint64_t nodes) {
     result.time_ms = time_ms;
     result.nodes = nodes;
     result.nps = compute_nps(nodes, time_ms);
-    return result;
-}
-
-MoveResult MoveResult::vct_win(Pos pos, uint64_t time_ms, uint64_t nodes) {
-    MoveResult result;
-    result.best_move = pos;
-    result.score = 800'000;
-    result.search_type = SearchType::VCT;
-    result.time_ms = time_ms;
-    result.nodes = nodes;
-    result.nps = compute_nps(nodes, time_ms);
-    return result;
-}
-
-MoveResult MoveResult::no_move(uint64_t time_ms) {
-    MoveResult result;
-    result.time_ms = time_ms;
-    return result;
-}
-
-MoveResult MoveResult::defense(Pos pos, int32_t score, uint64_t time_ms, uint64_t nodes) {
-    MoveResult result;
-    result.best_move = pos;
-    result.score = score;
-    result.search_type = SearchType::Defense;
-    result.time_ms = time_ms;
-    result.nodes = nodes;
     return result;
 }
 
@@ -116,16 +79,6 @@ MoveResult MoveResult::from_alphabeta(const SearchResult& search_result, uint64_
     result.depth = search_result.depth;
     result.tt_usage = tt_usage;
     result.nps = compute_nps(search_result.nodes, time_ms);
-    return result;
-}
-
-MoveResult MoveResult::alpha_beta(Pos pos, int32_t score, uint64_t time_ms, uint64_t nodes) {
-    MoveResult result;
-    result.best_move = pos;
-    result.score = score;
-    result.search_type = SearchType::AlphaBeta;
-    result.time_ms = time_ms;
-    result.nodes = nodes;
     return result;
 }
 
@@ -149,11 +102,6 @@ AIEngine::AIEngine(size_t tt_size_mb, int8_t max_depth, uint64_t time_limit_ms)
 {
 }
 
-std::optional<Pos> AIEngine::get_move(const Board& board, Stone color) {
-    Pos p = get_move_with_stats(board, color).best_move;
-    return p.is_sentinel() ? std::nullopt : std::optional<Pos>(p);
-}
-
 // =========================================================================
 // get_move_with_stats -- pipeline de decision
 // =========================================================================
@@ -174,6 +122,7 @@ MoveResult AIEngine::get_move_with_stats(const Board& board, Stone color) {
         << " W-cap: " << static_cast<int>(board.captures(Stone::White)) << "]";
     ai_log(oss.str());
 
+    // ? opponent color, used for capture checks and VCF skip logic
     Stone opponent = gomoku::opponent(color);
 
     // 1. Search VCF (Victory by Continuous Fours) - our forced win
@@ -242,14 +191,6 @@ MoveResult AIEngine::get_move_with_stats(const Board& board, Stone color) {
 
 void AIEngine::stop() {
     searcher_.stop();
-}
-
-void AIEngine::set_max_depth(int8_t depth) {
-    max_depth_ = depth;
-}
-
-void AIEngine::set_time_limit(uint64_t time_ms) {
-    time_limit_ms_ = time_ms;
 }
 
 void AIEngine::clear_cache() {
