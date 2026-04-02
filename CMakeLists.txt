@@ -23,7 +23,10 @@ file(GLOB_RECURSE LIB_SOURCES
     src/board/*.cpp
     src/rules/*.cpp
     src/eval/*.cpp
-    src/search/*.cpp
+    src/minimax/core/*.cpp
+    src/minimax/ordering/*.cpp
+    src/minimax/tactics/*.cpp
+    src/minimax/hash/*.cpp
     src/engine/*.cpp
 )
 
@@ -122,7 +125,4 @@ if(BUILD_GUI)
     )
 endif()
 
-# ── Benchmark (not in default build — use: make gomoku_bench) ─────────────────
-add_executable(gomoku_bench EXCLUDE_FROM_ALL bench/benchmark.cpp)
-target_link_libraries(gomoku_bench PRIVATE gomoku_lib)
 

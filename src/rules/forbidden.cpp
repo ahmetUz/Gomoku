@@ -26,6 +26,7 @@ static constexpr int DIRECTIONS[4][2] = {
     {1, -1},  // Diagonal SW
 };
 
+// Scanne une ligne depuis 'pos' dans la direction (dr,dc) : compte pierres, trous, bouts ouverts.
 LinePattern scan_line(const Board& board, Pos pos, Stone stone, int dr, int dc) {
     Stone opp = opponent(stone);
     LinePattern pat;
@@ -107,7 +108,7 @@ LinePattern scan_line(const Board& board, Pos pos, Stone stone, int dr, int dc) 
     return pat;
 }
 
-// Scan without allowing gaps (consecutive stones only)
+// Comme scan_line mais sans trou : ne compte que les pierres consecutives.
 static LinePattern scan_line_consecutive(
     const Board& board, Pos pos, Stone stone, int dr, int dc)
 {
@@ -161,6 +162,7 @@ static LinePattern scan_line_consecutive(
     return pat;
 }
 
+// Renvoie true si le pattern est un trois libre : 3 pierres, 2 bouts ouverts, span <= 4.
 bool is_free_three(const LinePattern& pattern) {
     // Must have exactly 3 stones
     if (pattern.stone_count != 3) return false;
@@ -193,7 +195,7 @@ bool is_free_three(const LinePattern& pattern) {
     return true;
 }
 
-// Check if placing stone creates a free-three in one direction
+// Teste si poser a 'pos' cree un trois libre dans la direction (dr,dc).
 static bool creates_free_three_in_direction(
     const Board& board, Pos pos, Stone stone, int dr, int dc)
 {
@@ -212,6 +214,7 @@ static bool creates_free_three_in_direction(
     return false;
 }
 
+// Compte le nombre de trois libres crees en posant a 'pos' (sur les 4 directions).
 uint8_t count_free_threes(const Board& board, Pos pos, Stone stone) {
     uint8_t count = 0;
 
@@ -225,6 +228,7 @@ uint8_t count_free_threes(const Board& board, Pos pos, Stone stone) {
     return count;
 }
 
+// Renvoie true si poser a 'pos' cree un double-trois (sauf si capture possible).
 bool is_double_three(const Board& board, Pos pos, Stone stone) {
     // Exception: if this move captures, double-three is allowed
     if (has_capture(board, pos, stone)) return false;
@@ -232,6 +236,7 @@ bool is_double_three(const Board& board, Pos pos, Stone stone) {
     return count_free_threes(board, pos, stone) >= 2;
 }
 
+// Coup valide = case vide + pas de double-trois interdit.
 bool is_valid_move(const Board& board, Pos pos, Stone stone) {
     if (!board.is_empty(pos)) return false;
     if (is_double_three(board, pos, stone)) return false;

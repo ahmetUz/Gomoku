@@ -3,9 +3,9 @@
 // Internal header -- per-thread search state for alpha-beta.
 // NOT part of the public API. Only included by src/search/*.cpp files.
 
-#include "gomoku/search/searcher.hpp"
-#include "gomoku/search/zobrist.hpp"
-#include "gomoku/search/tt.hpp"
+#include "gomoku/minimax/searcher.hpp"
+#include "gomoku/minimax/zobrist.hpp"
+#include "gomoku/minimax/transposition_table.hpp"
 #include "gomoku/eval/heuristic.hpp"
 #include "gomoku/eval/patterns.hpp"
 #include "gomoku/rules/capture.hpp"
@@ -199,7 +199,63 @@ struct WorkerSearcher {
         const std::vector<Pos>& five_positions, Stone five_color,
         uint64_t hash);
 
+    // --- Pruning & optimisations (pruning.cpp) ---
+
+    // Reverse Futility Pruning : couper si eval >> beta.
+    bool try_rfp(int8_t depth, bool non_terminal,
+                 int32_t static_eval, int32_t beta, int32_t& score);
+
+    // Razoring : tomber en quiescence si eval << alpha.
+    bool try_razoring(Board& board, Stone color, int8_t depth,
+                      bool non_terminal, int32_t static_eval,
+                      int32_t alpha, int32_t beta, Pos last_move,
+                      uint64_t hash, int32_t& score);
+
+    // Null Move Pruning : simuler "passer son tour".
+    bool try_nmp(Board& board, Stone color, int8_t depth,
+                 bool non_terminal, int32_t static_eval,
+                 int32_t alpha, int32_t beta, Pos last_move,
+                 uint64_t hash, bool allow_null, int32_t& score);
+
+    // Internal Iterative Deepening : mini-recherche pour TT move.
+    Pos try_iid(Board& board, Stone color, int8_t depth,
+                int32_t alpha, int32_t beta, Pos last_move,
+                uint64_t hash, Pos tt_move);
+
+    // Nombre de coups adaptatif selon profondeur et tactique.
+    static size_t compute_max_moves(int8_t depth, bool is_tactical);
+
+    // Marge futility par profondeur.
+    static int32_t compute_futility_margin(int8_t depth);
+
+    // Test futility pruning pour un coup.
+    static bool should_futility_prune(bool futility_ok, size_t move_index,
+                                      int32_t static_eval, int32_t futility_margin,
+                                      int32_t alpha, int32_t move_score);
+
+    // Test Late Move Pruning.
+    static bool should_lmp(size_t move_index, int8_t depth, int32_t move_score);
+
+    // Calcul de la reduction LMR.
+    static int8_t compute_lmr_reduction(int8_t depth, size_t move_index,
+                                        int32_t move_score, bool is_capture,
+                                        int8_t extension);
+
+    // PVS + LMR : recherche complete pour un coup (dispatch).
+    int32_t search_pvs(Board& board, Stone color, int8_t depth,
+                       int32_t alpha, int32_t beta, Pos mov,
+                       uint64_t child_hash, size_t move_index,
+                       int32_t move_score, bool is_capture, int8_t extension);
+
+    // Mise a jour killer/history/countermove apres beta cutoff.
+    void update_cutoff_heuristics(Pos mov, Stone color, int8_t depth,
+                                  Pos last_move, size_t move_index);
+
     // --- Move ordering ---
+
+    // Generate forcing moves for quiescence (fives, fours, capture-wins).
+    MoveList generate_forcing_moves(
+        const Board& board, Stone color, Stone opp, bool fours_allowed) const;
 
     // Generate candidate moves sorted by priority (partial sort).
     MoveList generate_moves_ordered(

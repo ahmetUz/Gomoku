@@ -13,7 +13,7 @@
 // captures, car deux positions identiques avec des captures differentes
 // ont des proprietes strategiques differentes.
 
-#include "gomoku/search/zobrist.hpp"
+#include "gomoku/minimax/zobrist.hpp"
 #include <algorithm>
 
 namespace gomoku {
@@ -78,11 +78,6 @@ uint64_t ZobristTable::update_place(uint64_t h, Pos pos, Stone stone) const {
     }
 
     return h ^ stone_hash ^ black_to_move;
-}
-
-uint64_t ZobristTable::update_remove(uint64_t h, Pos pos, Stone stone) const {
-    // XOR is its own inverse: a ^ b ^ b = a
-    return update_place(h, pos, stone);
 }
 
 uint64_t ZobristTable::update_capture(uint64_t h, Pos pos, Stone stone) const {

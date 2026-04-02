@@ -14,7 +14,7 @@
 // ou s'il a 3+ captures, toute capture le rapproche d'une victoire par
 // captures et compte comme defense.
 
-#include "gomoku/search/threat.hpp"
+#include "gomoku/minimax/vcf.hpp"
 #include "gomoku/rules/capture.hpp"
 #include "gomoku/rules/win.hpp"
 #include "gomoku/rules/forbidden.hpp"
@@ -56,10 +56,10 @@ static bool captures_any_of(const Board& board, Pos pos, Stone stone,
 }
 
 ThreatSearcher::ThreatSearcher()
-    : max_vcf_depth_(30), max_vct_depth_(20), nodes_(0) {}
+    : max_vcf_depth_(30), nodes_(0) {}
 
-ThreatSearcher::ThreatSearcher(uint8_t vcf_depth, uint8_t vct_depth)
-    : max_vcf_depth_(vcf_depth), max_vct_depth_(vct_depth), nodes_(0) {}
+ThreatSearcher::ThreatSearcher(uint8_t vcf_depth, uint8_t /*vct_depth*/)
+    : max_vcf_depth_(vcf_depth), nodes_(0) {}
 
 bool ThreatSearcher::is_timed_out() const {
     if (search_time_limit_ms_ == 0) return false;

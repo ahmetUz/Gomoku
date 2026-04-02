@@ -43,41 +43,29 @@ public:
     ThreatResult search_vcf(const Board& board, Stone color,
                             uint64_t time_limit_ms = 0);
 
-    // Search for VCT (Victory by Continuous Threats)
-    // Tries VCF first, then falls back to VCT with open-three threats.
-    ThreatResult search_vct(const Board& board, Stone color);
-
     uint64_t nodes() const { return nodes_; }
 
 private:
-    friend struct VCTAccess; // threat_vct.cpp access
-
     uint8_t max_vcf_depth_;
-    uint8_t max_vct_depth_;
     uint64_t nodes_;
     std::chrono::steady_clock::time_point search_start_;
     uint64_t search_time_limit_ms_ = 0;
 
     bool is_timed_out() const;
 
-    // Shared helpers (used by both VCF and VCT)
+public:
+    // Analysis helpers (also used by tests)
     bool creates_five_or_more(const Board& board, Pos pos, Stone color) const;
     bool creates_four(const Board& board, Pos pos, Stone color) const;
+
     std::vector<Pos> find_four_threats(const Board& board, Stone color) const;
+
+private:
     std::vector<Pos> find_defense_moves(
         const Board& board, Pos threat_move, Stone attacker) const;
 
-    // VCF (threat_vcf.cpp)
     bool vcf_search(Board& board, Stone color, uint8_t depth,
                     std::vector<Pos>& sequence);
-
-    // VCT-only helpers (threat_vct.cpp)
-    bool creates_open_three(const Board& board, Pos pos, Stone color) const;
-    bool vct_search(Board& board, Stone color, uint8_t depth,
-                    std::vector<Pos>& sequence);
-    std::vector<Pos> find_all_threats(const Board& board, Stone color) const;
-    std::vector<Pos> find_threat_defenses(
-        const Board& board, Pos threat_move, Stone attacker) const;
 };
 
 } // namespace gomoku

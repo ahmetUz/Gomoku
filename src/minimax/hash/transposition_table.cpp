@@ -13,7 +13,7 @@
 // Chaque entree contient : profondeur, score, type (exact/borne), meilleur coup.
 // Le tout est compresse en 42 bits pour tenir dans un seul uint64_t atomique.
 
-#include "gomoku/search/tt.hpp"
+#include "gomoku/minimax/transposition_table.hpp"
 #include <algorithm>
 #include <cstddef>
 

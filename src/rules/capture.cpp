@@ -22,6 +22,7 @@ static constexpr int DIRECTIONS[4][2] = {
     {1, -1},  // Diagonal SW
 };
 
+// Renvoie les positions des pierres capturees si on pose a 'pos' (pattern X-OO-X).
 std::vector<Pos> get_captured_positions(const Board& board, Pos pos, Stone stone) {
     std::vector<Pos> captured;
     Stone opp = opponent(stone);
@@ -53,6 +54,7 @@ std::vector<Pos> get_captured_positions(const Board& board, Pos pos, Stone stone
     return captured;
 }
 
+// Renvoie true si poser a 'pos' capture au moins une paire adverse.
 bool has_capture(const Board& board, Pos pos, Stone stone) {
     Stone opp = opponent(stone);
 
@@ -80,6 +82,7 @@ bool has_capture(const Board& board, Pos pos, Stone stone) {
     return false;
 }
 
+// Compte le nombre de paires capturees si on pose a 'pos' (sans allouer de vector).
 uint8_t count_captures_fast(const Board& board, Pos pos, Stone stone) {
     Stone opp = opponent(stone);
     uint8_t pairs = 0;
@@ -108,8 +111,8 @@ uint8_t count_captures_fast(const Board& board, Pos pos, Stone stone) {
     return pairs;
 }
 
+// Execute les captures sur le board : retire les paires et met a jour le compteur.
 CaptureInfo execute_captures_fast(Board& board, Pos pos, Stone stone) {
-    // 
     Stone opp = opponent(stone);
     CaptureInfo info{};
 
@@ -145,6 +148,7 @@ CaptureInfo execute_captures_fast(Board& board, Pos pos, Stone stone) {
     return info;
 }
 
+// Annule les captures (backtracking) : repose les pierres et decremente le compteur.
 void undo_captures(Board& board, Stone stone, const CaptureInfo& info) {
     Stone opp = opponent(stone);
     for (uint8_t i = 0; i < info.count; ++i) {

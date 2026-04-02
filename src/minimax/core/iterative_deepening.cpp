@@ -10,7 +10,7 @@
 // La recherche recursive (alpha_beta, quiescence, five_break) est dans
 // alpha_beta.cpp. Le tri des coups est dans move_ordering.cpp.
 
-#include "search_internal.hpp"
+#include "../minimax_internal.hpp"
 
 namespace gomoku {
 
@@ -341,16 +341,23 @@ SearchResult WorkerSearcher::search_root(
 
         int8_t extension = move_creates_four(board, mov, color) ? int8_t(1) : int8_t(0);
 
+        // PVS (Principal Variation Search) :
+        // - i == 0 : premier coup (suppose meilleur) → fenetre complete [-beta, -alpha]
+        // - i > 0  : coups suivants → fenetre nulle [-(alpha+1), -alpha]
+        //            pour tester rapidement s'ils sont meilleurs que le premier.
+        //            Si oui (score > alpha), re-search avec fenetre complete.
         int32_t score;
         if (i == 0) {
             score = -alpha_beta(
                 board, opponent(color), depth - 1 + extension,
                 -beta, -alpha, mov, child_hash, true);
         } else {
+            // Scout : fenetre nulle, "ce coup est-il meilleur que alpha ?"
             score = -alpha_beta(
                 board, opponent(color), depth - 1 + extension,
                 -(alpha + 1), -alpha, mov, child_hash, true);
             if (!is_stopped() && score > alpha && score < beta) {
+                // Oui → re-search complete pour connaitre le vrai score
                 score = -alpha_beta(
                     board, opponent(color), depth - 1 + extension,
                     -beta, -alpha, mov, child_hash, true);

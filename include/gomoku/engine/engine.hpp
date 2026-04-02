@@ -10,8 +10,8 @@
 // natively by the alpha-beta search via move ordering and quiescence.
 
 #include "gomoku/board/board.hpp"
-#include "gomoku/search/searcher.hpp"
-#include "gomoku/search/threat.hpp"
+#include "gomoku/minimax/searcher.hpp"
+#include "gomoku/minimax/vcf.hpp"
 #include <cstdint>
 #include <optional>
 #include <string>

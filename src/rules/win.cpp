@@ -22,6 +22,7 @@ static constexpr int DIRECTIONS[4][2] = {
     {1, -1},  // Diagonal SW
 };
 
+// Parcourt toutes les pierres d'une couleur, renvoie true si l'une forme un 5+.
 bool has_five_in_row(const Board& board, Stone stone) {
     const Bitboard* bb = board.stones(stone);
     if (!bb) return false;
@@ -31,6 +32,7 @@ bool has_five_in_row(const Board& board, Stone stone) {
     return false;
 }
 
+// Verifie si la pierre a 'pos' fait partie d'un alignement de 5+ dans une des 4 directions.
 bool has_five_at_pos(const Board& board, Pos pos, Stone color) {
     // Direction order matches Rust: (1,0), (0,1), (1,1), (1,-1)
     constexpr int SZ = 19;
@@ -71,6 +73,7 @@ bool has_five_at_pos(const Board& board, Pos pos, Stone color) {
     return false;
 }
 
+// Comme has_five_at_pos mais renvoie les positions des pierres du cinq trouve.
 std::optional<std::vector<Pos>> find_five_line_at_pos(
     const Board& board, Pos pos, Stone color)
 {
@@ -112,6 +115,7 @@ std::optional<std::vector<Pos>> find_five_line_at_pos(
     return std::nullopt;
 }
 
+// Cherche un cinq parmi toutes les pierres d'une couleur. Renvoie les positions si trouve.
 std::optional<std::vector<Pos>> find_five_positions(
     const Board& board, Stone stone)
 {
@@ -155,6 +159,7 @@ std::optional<std::vector<Pos>> find_five_positions(
     return std::nullopt;
 }
 
+// Verifie si l'adversaire peut capturer une paire du cinq (motif X-OO-X) pour le casser.
 bool can_break_five_by_capture(
     const Board& board,
     const std::vector<Pos>& five_positions,
@@ -192,6 +197,7 @@ bool can_break_five_by_capture(
     return false;
 }
 
+// Renvoie la liste des coups qui cassent le cinq (positions ou l'adversaire peut capturer).
 std::vector<Pos> find_five_break_moves(
     const Board& board,
     const std::vector<Pos>& five_positions,
@@ -232,6 +238,7 @@ std::vector<Pos> find_five_break_moves(
     return break_moves;
 }
 
+// Determine le gagnant : capture >= 5 paires, cinq incassable, ou nullopt si pas fini.
 std::optional<Stone> check_winner(const Board& board, Stone last_player) {
     // Check capture win first (5 pairs = 10 stones)
     if (board.captures(Stone::Black) >= 5) return Stone::Black;

@@ -26,10 +26,6 @@ public:
     // Also toggles the side-to-move component. O(1).
     uint64_t update_place(uint64_t h, Pos pos, Stone stone) const;
 
-    // Incrementally update hash after removing a stone.
-    // XOR is its own inverse, so identical to update_place.
-    uint64_t update_remove(uint64_t h, Pos pos, Stone stone) const;
-
     // Update hash for a capture (removing opponent stone without toggling side).
     uint64_t update_capture(uint64_t h, Pos pos, Stone stone) const;
 

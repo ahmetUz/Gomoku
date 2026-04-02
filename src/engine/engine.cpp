@@ -10,7 +10,7 @@
 // (jusqu'a 30 plies) que l'alpha-beta ne verrait pas dans son budget temps.
 
 #include "gomoku/engine/engine.hpp"
-#include "gomoku/search/tt.hpp"
+#include "gomoku/minimax/transposition_table.hpp"
 #include "gomoku/rules/capture.hpp"
 #include "gomoku/rules/win.hpp"
 #include "gomoku/rules/forbidden.hpp"
