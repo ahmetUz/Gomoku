@@ -1,0 +1,183 @@
+# Valgrind suppression file for Gomoku
+#
+# All 585 valgrind "errors" come from external system libraries, not our code:
+#   - 582 "possibly lost" from Mesa swrast_dri.so (software OpenGL renderer)
+#   - 3 errors from WSL2 GPU drivers / dynamic linker
+#   - 0 errors from gomoku code
+#
+# Usage: valgrind --suppressions=gomoku.supp --leak-check=full ./gomoku_gui
+
+# ── Mesa / OpenGL software renderer (swrast) ─────────────────────────────────
+# Mesa's software rasterizer allocates thread-local storage and internal caches
+# that are intentionally never freed (process-lifetime singletons).
+{
+   mesa_swrast_init
+   Memcheck:Leak
+   ...
+   obj:*/dri/swrast_dri.so
+}
+{
+   mesa_glx_leak
+   Memcheck:Leak
+   ...
+   obj:*/libGLX_mesa.so*
+}
+{
+   mesa_gldispatch_leak
+   Memcheck:Leak
+   ...
+   obj:*/libGLdispatch.so*
+}
+{
+   mesa_gl_leak
+   Memcheck:Leak
+   ...
+   obj:*/libGL.so*
+}
+{
+   mesa_glx_base_leak
+   Memcheck:Leak
+   ...
+   obj:*/libGLX.so*
+}
+
+# ── WSL2 GPU / DirectX translation layer ─────────────────────────────────────
+# WSL2 translates OpenGL → DirectX via libd3d12/libdxcore. These drivers have
+# known valgrind false positives (uninitialized ioctl params, SSE reads).
+{
+   wsl_dxcore_ioctl
+   Memcheck:Param
+   ioctl(generic)
+   ...
+   obj:*/libdxcore.so
+}
+{
+   wsl_d3d12_leak
+   Memcheck:Leak
+   ...
+   obj:*/libd3d12.so
+}
+{
+   wsl_d3d12core_leak
+   Memcheck:Leak
+   ...
+   obj:*/libd3d12core.so
+}
+{
+   wsl_d3d12core_ioctl
+   Memcheck:Param
+   ioctl(generic)
+   ...
+   obj:*/libd3d12core.so
+}
+{
+   wsl_igd_driver_leak
+   Memcheck:Leak
+   ...
+   obj:*/libigd12um*.so
+}
+{
+   wsl_igd_driver_write
+   Memcheck:Value8
+   ...
+   obj:*/libigd12um*.so
+}
+{
+   wsl_igd_driver_addr
+   Memcheck:Addr8
+   ...
+   obj:*/libigd12um*.so
+}
+
+# ── Dynamic linker (ld-linux) ─────────────────────────────────────────────────
+# The glibc dynamic linker uses optimized string functions (SSE2 strncmp) that
+# read past allocation boundaries — harmless but triggers valgrind.
+{
+   glibc_dl_strncmp
+   Memcheck:Addr8
+   fun:strncmp
+   fun:is_dst
+   ...
+}
+{
+   glibc_dl_open_leak
+   Memcheck:Leak
+   ...
+   fun:_dl_open
+}
+{
+   glibc_dl_init_leak
+   Memcheck:Leak
+   ...
+   fun:_dl_init
+}
+
+# ── X11 / Xlib ───────────────────────────────────────────────────────────────
+# X11 client libraries maintain persistent connection state that is cleaned up
+# by the X server on disconnect, not by explicit free().
+{
+   x11_leak
+   Memcheck:Leak
+   ...
+   obj:*/libX11.so*
+}
+{
+   xcb_leak
+   Memcheck:Leak
+   ...
+   obj:*/libxcb.so*
+}
+{
+   xrandr_leak
+   Memcheck:Leak
+   ...
+   obj:*/libXrandr.so*
+}
+{
+   xcursor_leak
+   Memcheck:Leak
+   ...
+   obj:*/libXcursor.so*
+}
+
+# ── FreeType / Fontconfig ─────────────────────────────────────────────────────
+{
+   freetype_leak
+   Memcheck:Leak
+   ...
+   obj:*/libfreetype.so*
+}
+{
+   fontconfig_leak
+   Memcheck:Leak
+   ...
+   obj:*/libfontconfig.so*
+}
+
+# ── LLVM (Mesa shader JIT compiler) ───────────────────────────────────────────
+{
+   llvm_pass_registry
+   Memcheck:Leak
+   ...
+   obj:*/libLLVM*.so*
+}
+
+# ── SFML internals ────────────────────────────────────────────────────────────
+{
+   sfml_window_leak
+   Memcheck:Leak
+   ...
+   obj:*/libsfml-window*
+}
+{
+   sfml_graphics_leak
+   Memcheck:Leak
+   ...
+   obj:*/libsfml-graphics*
+}
+{
+   sfml_system_leak
+   Memcheck:Leak
+   ...
+   obj:*/libsfml-system*
+}

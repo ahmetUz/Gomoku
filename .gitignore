@@ -12,8 +12,9 @@ cmake-build-*/
 # OMC plugin state
 .omc/
 
-# Logs
+# Logs & game transcripts
 gomoku_ai.log
+partie.txt
 
 # OS
 .DS_Store

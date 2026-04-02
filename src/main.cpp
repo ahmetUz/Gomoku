@@ -33,7 +33,6 @@ namespace ansi {
     const char* green   = "\033[32m";
     const char* yellow  = "\033[33m";
     const char* blue    = "\033[34m";
-    const char* magenta = "\033[35m";
     const char* cyan    = "\033[36m";
     const char* white   = "\033[37m";
     const char* bg_red  = "\033[41m";
@@ -187,7 +186,7 @@ void display_info(const GameState& state) {
     }
 
     // AI stats from last search
-    if (state.last_ai_result.best_move.has_value()) {
+    if (!state.last_ai_result.best_move.is_sentinel()) {
         const auto& r = state.last_ai_result;
         std::cout << "  AI: ";
 
@@ -271,7 +270,7 @@ bool execute_move(GameState& state, Pos pos) {
     }
 
     // Check win
-    auto winner = check_winner(state.board);
+    auto winner = check_winner(state.board, color);
     if (winner.has_value()) {
         state.winner = winner;
         state.game_over = true;
@@ -371,7 +370,6 @@ int main() {
     std::cout << ansi::bold << "\n"
               << "  =============================================\n"
               << "  |         GOMOKU - Ninuki-renju             |\n"
-              << "  |      42 Project (C++ Translation)         |\n"
               << "  =============================================\n"
               << ansi::reset << "\n"
               << "  Win by: 5-in-a-row (unbreakable) or 5 pair captures\n"
@@ -432,9 +430,9 @@ int main() {
             MoveResult result = engine.get_move_with_stats(state.board, state.current_turn);
             state.last_ai_result = result;
 
-            if (result.best_move.has_value()) {
-                std::cout << " " << pos_to_notation(*result.best_move) << "\n";
-                execute_move(state, *result.best_move);
+            if (!result.best_move.is_sentinel()) {
+                std::cout << " " << pos_to_notation(result.best_move) << "\n";
+                execute_move(state, result.best_move);
             } else {
                 std::cout << ansi::red << " No move found!" << ansi::reset << "\n";
                 break;
@@ -480,9 +478,9 @@ int main() {
             std::cout << "  " << ansi::cyan << "Thinking..." << ansi::reset << std::flush;
             MoveResult result = engine.get_move_with_stats(state.board, state.current_turn);
             state.last_ai_result = result;
-            if (result.best_move.has_value()) {
+            if (!result.best_move.is_sentinel()) {
                 std::cout << " Suggestion: " << ansi::bold
-                          << pos_to_notation(*result.best_move)
+                          << pos_to_notation(result.best_move)
                           << ansi::reset << "\n";
             } else {
                 std::cout << " No suggestion.\n";

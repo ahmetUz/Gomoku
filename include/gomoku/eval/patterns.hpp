@@ -1,9 +1,10 @@
 #pragma once
 
-// Pattern scores for Gomoku evaluation
+// Scores des patterns -- echelle de valeur des motifs au Gomoku
 //
-// These constants define the scoring weights for various board patterns.
-// Carefully tuned for strong play with Ninuki-renju rules.
+// Chaque motif (cinq, quatre ouvert, trois ouvert, etc.) a une valeur
+// numerique qui reflete sa dangerosité. L'echelle est soigneusement
+// calibree pour les regles Ninuki-renju avec captures de paires.
 
 #include <cstdint>
 
@@ -28,8 +29,6 @@ struct PatternScore {
     static constexpr int CLOSED_TWO  =     200;    // XOO_ or _OOX
 
     // Capture related -- critical in Ninuki-renju
-    static constexpr int CAPTURE_THREAT    =  8'000;   // Can capture next move
-    static constexpr int CAPTURE_PAIR      =  5'000;   // Value per captured pair
     static constexpr int NEAR_CAPTURE_WIN  = 80'000;   // 4 pairs (one more = win)
 };
 
